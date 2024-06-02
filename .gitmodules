@@ -1,0 +1,3 @@
+[submodule "web/meshcat"]
+	path = web/meshcat
+	url = git@github.com:meshcat-dev/meshcat.git
