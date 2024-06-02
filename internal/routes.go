@@ -1,6 +1,6 @@
 package internal
 
 func (s *Server) Routes() {
-	s.Router.GET("app*", s.StaticHandler("web/meshcat/dist"))
-	s.Router.GET("/", s.WsHandler())
+	s.Router.GET("/ws", s.WsHandler())
+	s.Router.GET("/*", s.StaticHandler("web/meshcat/dist"))
 }

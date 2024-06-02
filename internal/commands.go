@@ -1,8 +1,48 @@
 package internal
 
-import (
-	"github.com/google/uuid"
-)
+// "github.com/vmihailenco/msgpack/v5"
+
+type SetObject struct {
+	Type   string `json:"type" msgpack:"type"`
+	Object Object `json:"object" msgpack:"object"`
+	Path   string `json:"path" msgpack:"path"`
+}
+
+type SetTransform struct {
+	Type   string    `json:"type" msgpack:"type"`
+	Matrix []float32 `json:"matrix" msgpack:"matrix"`
+	Path   string    `json:"path" msgpack:"path"`
+}
+
+type CaptureImage struct {
+	Type string `json:"type" msgpack:"type"`
+	Xres int    `json:"xres" msgpack:"xres"`
+	Yres int    `json:"yres" msgpack:"yres"`
+}
+
+type Delete struct {
+	Type string `json:"type" msgpack:"type"`
+	Path string `json:"path" msgpack:"path"`
+}
+
+type SetProperty struct {
+	Type        string
+	Path        string
+	SetProperty string
+	Value       interface{}
+}
+
+type AnimationOptions struct {
+	Play        bool
+	Repetitions int
+}
+
+type SetAnimation struct {
+	Type       string
+	Animations interface{}
+	Options    AnimationOptions
+	Path       string
+}
 
 /*
 from .geometry import Geometry, Object, Mesh, MeshPhongMaterial, OrthographicCamera, PerspectiveCamera, PointsMaterial, Points, TextTexture
@@ -129,26 +169,21 @@ class SetAnimation:
         }
 */
 
-type SceneElement struct {
-	uid string `msgpack: "uuid"`
-}
+// type SceneElement struct {
+// 	uid string `msgpack: "uuid"`
+// }
 
-type Metadata struct {
-	version   string
-	_type     string `msgpack:"type"`
-	generator string
-}
-type ThreeObject struct {
-	uid      uuid.UUID `msgpack:"uuid"`
-	name     string    `msgpacl:"name,omitempty"`
-	_type    string    `msgpack:"type"`
-	geometry string
-	material string
-	matrix   []float32
-	children []ThreeObject `msgpack:"children,omitempty"`
-}
-
-type SetObject struct {
-	msg_type string
-	path     string
-}
+// type Metadata struct {
+// 	version   string
+// 	_type     string `msgpack:"type"`
+// 	generator string
+// }
+// type ThreeObject struct {
+// 	uid      uuid.UUID `msgpack:"uuid"`
+// 	name     string    `msgpacl:"name,omitempty"`
+// 	_type    string    `msgpack:"type"`
+// 	geometry string
+// 	material string
+// 	matrix   []float32
+// 	children []ThreeObject `msgpack:"children,omitempty"`
+// }
