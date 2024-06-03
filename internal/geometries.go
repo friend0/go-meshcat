@@ -75,7 +75,6 @@ func NewBox(width, height, depth float32) Box {
 	}
 }
 
-// todo: generics candidate
 func Objectify[T Geometry](g T) Scene {
 	scene_element := g.get_element()
 	obj := NewScene()

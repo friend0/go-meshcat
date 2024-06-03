@@ -14,7 +14,7 @@ func TestSetObjectSerialization(t *testing.T) {
 			Type: "set_object",
 			Path: "/tmp/geom",
 		},
-		Object: NewBox(1, 1, 1).NewObject(),
+		Object: NewBox(1, 1, 1),
 	}
 
 	// Serialize the object to MessagePack
