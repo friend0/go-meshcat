@@ -10,15 +10,11 @@ import (
 
 func TestSetObjectSerialization(t *testing.T) {
 	original := &SetObject{
-		Type: "box",
-		Object: Box{
-			Uuid:   [16]byte{},
-			Type:   "",
-			Width:  0,
-			Height: 0,
-			Depth:  0,
+		Command: Command{
+			Type: "set_object",
+			Path: "/tmp/geom",
 		},
-		Path: "/tmp/geom",
+		Object: NewBox(1, 1, 1).NewObject(),
 	}
 
 	// Serialize the object to MessagePack

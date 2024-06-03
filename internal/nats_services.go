@@ -20,13 +20,15 @@ func (s *Server) NATSSubscriptions() error {
 	// Subscribe to NATS subject
 	_, err := s.NATS.Subscribe("meshcat", func(msg *nats.Msg) {
 		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
-		b := Box{}
-		obj := b.hydrateObject()
-		err := enc.Encode(&SetObject{
-			Type:   "set_object",
+		b := NewBox(1, 1, 1)
+		obj := Objectify(b)
+		err := enc.Encode(SetObject{
 			Object: obj,
-			Path:   "/boxes/",
-		})
+			Command: Command{
+				Type: "set_object",
+				Path: "meshcat/objects",
+			}})
+
 		if err != nil {
 			log.Printf("error sending msg: %v", err)
 		}
