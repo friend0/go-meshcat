@@ -21,12 +21,11 @@ var pongWait = 60 * time.Second
 // Define the WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 8192,
+	WriteBufferSize: 1024,
 	WriteBufferPool: &sync.Pool{},
 	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		fmt.Println("ORIGIN: ", origin)
-		return origin == "http://localhost:8080"
+		return true
+		// return origin == "http://localhost:8080"
 	},
 }
 
@@ -66,6 +65,7 @@ func (s *Server) WsHandler() echo.HandlerFunc {
 			ws.WriteMessage(websocket.PingMessage, nil)
 			return nil
 		})
+		ws.SetReadLimit(75 * 1024 * 1024)
 		s.WS = ws
 		go wsprocess(s.WS)
 		return nil

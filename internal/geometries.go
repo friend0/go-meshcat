@@ -79,11 +79,6 @@ func NewBox(width, height, depth float32) Box {
 	}
 }
 
-// u"type": u"_meshfile_geometry",
-// u"uuid": self.uuid,
-// u"format": self.mesh_format,
-// u"data": self.contents
-
 type MeshGeometry struct {
 	SceneElement
 	Format string `json:"format" msgpack:"format"`

@@ -72,17 +72,18 @@ func (s *Server) urlSubscription() (*nats.Subscription, error) {
 
 // SetObject handler
 func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
-	var buf bytes.Buffer
-	enc := msgpack.NewEncoder(&buf)
 	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
+		var buf bytes.Buffer
+		enc := msgpack.NewEncoder(&buf)
 		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
-		// b := NewBox(1, 1, 1)
-		starling, err := NewStarling(1.0, 1.0, 1.0)
-		if err != nil {
-			log.Printf("error during starling geometry creation")
-		}
-		obj := Objectify(starling)
-		err = enc.Encode(SetObject{
+		b := NewBox(1, 1, 1)
+		/* 		_, err := NewStarling(1.0, 1.0, 1.0)
+		   		if err != nil {
+		   			log.Printf("error during starling geometry creation")
+		   		} */
+		// s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS: %d", len(b)))
+		obj := Objectify(b)
+		err := enc.Encode(SetObject{
 			Object: obj,
 			Command: Command{
 				Type: "set_object",
