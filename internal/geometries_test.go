@@ -9,11 +9,13 @@ import (
 
 func TestGeometrySerialization(t *testing.T) {
 	original := &Box{
-		Uuid:   [16]byte{},
-		Type:   "BoxGeometry",
-		Width:  0,
-		Height: 0,
-		Depth:  0,
+		SceneElement: SceneElement{
+			Uuid: "3d984587-36fc-404e-bc68-3a25574cdb8b",
+			Type: "BoxGeometry",
+		},
+		Width:  8,
+		Height: 9,
+		Depth:  10,
 	}
 
 	// Serialize the object to MessagePack

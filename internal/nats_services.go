@@ -11,18 +11,78 @@ import (
 )
 
 func (s *Server) NATSSubscriptions() error {
-	var buf bytes.Buffer
-	enc := msgpack.NewEncoder(&buf)
 	// enc.UseArrayEncodedStructs(true)
 	// enc.UseCompactFloats(true)
 	// enc.UseCompactInts(true)
 
-	// Subscribe to NATS subject
-	_, err := s.NATS.Subscribe("meshcat", func(msg *nats.Msg) {
+	// todo: track subscriptions so we can cleanup
+	_, err := s.urlSubscription()
+	if err != nil {
+		return err
+	}
+	_, err = s.setObjectSubscription()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.setTransform()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.delete()
+	if err != nil {
+		return err
+	}
+
+	s.NATS.Flush()
+	log.Printf("Listening on [%s]", "meshcat")
+	return nil
+}
+
+var MeshcatCommands = map[string]bool{
+	"set_transform": true,
+	"set_object":    true,
+	"delete":        true,
+	"set_property":  true,
+	"set_animation": true,
+}
+
+func (s *Server) urlSubscription() (*nats.Subscription, error) {
+
+	sub, err := s.NATS.QueueSubscribe("meshcat.url", "MESHCAT_URL_Q", func(msg *nats.Msg) {
+		b, err := msgpack.Marshal(&msg)
+		fmt.Println("Here")
+		if err != nil {
+			log.Printf("error sending msg: %v", err)
+		}
+		if s.WS != nil {
+			s.WS.WriteMessage(websocket.BinaryMessage, b)
+			_, m, _ := s.WS.ReadMessage()
+			log.Printf("read one %v", m)
+		} else {
+			log.Printf("no ws conn")
+		}
+	})
+	if err != nil {
+		log.Fatalf("Error subscribing to NATS subject: %v", err)
+	}
+	return sub, err
+}
+
+// SetObject handler
+func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
+	var buf bytes.Buffer
+	enc := msgpack.NewEncoder(&buf)
+	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
 		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
-		b := NewBox(1, 1, 1)
-		obj := Objectify(b)
-		err := enc.Encode(SetObject{
+		// b := NewBox(1, 1, 1)
+		starling, err := NewStarling(1.0, 1.0, 1.0)
+		if err != nil {
+			log.Printf("error during starling geometry creation")
+		}
+		obj := Objectify(starling)
+		err = enc.Encode(SetObject{
 			Object: obj,
 			Command: Command{
 				Type: "set_object",
@@ -46,53 +106,13 @@ func (s *Server) NATSSubscriptions() error {
 	if err != nil {
 		log.Fatalf("Error subscribing to NATS subject: %v", err)
 	}
-
-	_, err = s.NATS.QueueSubscribe("meshcat.url", "MESHCAT_URL_Q", func(msg *nats.Msg) {
-		b, err := msgpack.Marshal(&msg)
-		fmt.Println("Here")
-		if err != nil {
-			log.Printf("error sending msg: %v", err)
-		}
-		if s.WS != nil {
-			s.WS.WriteMessage(websocket.BinaryMessage, b)
-			_, m, _ := s.WS.ReadMessage()
-			log.Printf("read one %v", m)
-		} else {
-			log.Printf("no ws conn")
-		}
-	})
-	if err != nil {
-		log.Fatalf("Error subscribing to NATS subject: %v", err)
-	}
-	s.NATS.Flush()
-
-	log.Printf("Listening on [%s]", "meshcat")
-	return nil
+	return sub, err
 }
 
-var MeshcatCommands = map[string]bool{
-	"set_transform": true,
-	"set_object":    true,
-	"delete":        true,
-	"set_property":  true,
-	"set_animation": true,
+func (s *Server) setTransform() (*nats.Subscription, error) {
+	return nil, nil
 }
 
-func (s *Server) MessageHandler(topic, msg string) error {
-	if s.NATS == nil {
-
-	}
-	switch topic {
-	case "url":
-	case "wait":
-	case "set_target":
-	case "capture_image":
-	default:
-		_, ok := MeshcatCommands[topic]
-		if !ok {
-			return fmt.Errorf("%v is not a valid command", topic)
-		}
-
-	}
-	return nil
+func (s *Server) delete() (*nats.Subscription, error) {
+	return nil, nil
 }

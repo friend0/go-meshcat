@@ -13,17 +13,20 @@ import (
 
 var writeWait = 10 * time.Second
 var pongWait = 60 * time.Second
-var pingPeriod = (pongWait * 9) / 10
+
+// var pingPeriod = (pongWait * 9) / 10
+
+// todo: implement hub and read/write pump as in chat example so that we can properly manage multiple connections
 
 // Define the WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	WriteBufferSize: 8192,
 	WriteBufferPool: &sync.Pool{},
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
-		fmt.Println(origin)
-		return origin == "http://localhost:8081"
+		fmt.Println("ORIGIN: ", origin)
+		return origin == "http://localhost:8080"
 	},
 }
 

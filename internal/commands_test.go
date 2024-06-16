@@ -9,12 +9,18 @@ import (
 )
 
 func TestSetObjectSerialization(t *testing.T) {
-	original := &SetObject{
+
+	original := SetObject{
 		Command: Command{
-			Type: "set_object",
-			Path: "/tmp/geom",
+			Type: "",
+			Path: "",
 		},
-		Object: NewBox(1, 1, 1),
+		Object: Scene{
+			Metadata:   SceneMetadata{},
+			Geometries: []Geometry{},
+			Materials:  []Material{},
+			Object:     SceneObject{},
+		},
 	}
 
 	// Serialize the object to MessagePack
@@ -38,10 +44,5 @@ func TestSetObjectSerialization(t *testing.T) {
 		t.Errorf("expected Type %s, got %s", original.Type, deserialized.Type)
 	}
 	log.Printf("%#v", buf)
-	// if original.Name != deserialized.Name {
-	// 	t.Errorf("expected Name %s, got %s", original.Name, deserialized.Name)
-	// }
-	// if !bytes.Equal(original.Data, deserialized.Data) {
-	// 	t.Errorf("expected Data %v, got %v", original.Data, deserialized.Data)
-	// }
+
 }

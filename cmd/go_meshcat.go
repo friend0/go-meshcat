@@ -11,11 +11,15 @@ import (
 	"time"
 
 	"github.com/friend0/go-meshcat/internal"
+	"github.com/nats-io/nats.go"
+	"github.com/spf13/viper"
 )
 
 func run(ctx context.Context) (err error) {
+	viper.SetDefault("MAX_NATS_CONNECT_RETRIES", 5)
+	viper.SetDefault("NATS_URL", nats.DefaultURL)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	s, err := internal.NewServer()
+	s, err := internal.NewServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}

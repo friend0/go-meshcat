@@ -1,6 +1,10 @@
 package internal
 
 import (
+	"log"
+	"os"
+	"path"
+
 	"github.com/google/uuid"
 )
 
@@ -75,12 +79,45 @@ func NewBox(width, height, depth float32) Box {
 	}
 }
 
+// u"type": u"_meshfile_geometry",
+// u"uuid": self.uuid,
+// u"format": self.mesh_format,
+// u"data": self.contents
+
+type MeshGeometry struct {
+	SceneElement
+	Format string `json:"format" msgpack:"format"`
+	Data   []byte `json:"data" msgpack:"data"`
+}
+
+func (m MeshGeometry) get_element() SceneElement {
+	return m.SceneElement
+}
+
+func NewStarling(x, y, z float32) (MeshGeometry, error) {
+	wd, _ := os.Getwd()
+	data, err := os.ReadFile(path.Join(wd, "/web/meshcat/data/Stanford_Bunny_sample.stl"))
+	if err != nil {
+		log.Fatal(err)
+		return MeshGeometry{}, err
+	}
+	return MeshGeometry{
+		SceneElement: SceneElement{
+			Uuid: uuid.NewString(),
+			Type: "_meshfile_geometry",
+		},
+		Format: "stl",
+		Data:   data,
+	}, nil
+
+}
+
 func Objectify[T Geometry](g T) Scene {
 	scene_element := g.get_element()
 	obj := NewScene()
 	obj.Object.GeometryUUID = scene_element.Uuid
 	obj.Object.MaterialUUID = DEFAULT_MATERIAL
-	obj.Object.Type = "Mesh"
+	obj.Object.Type = scene_element.Type
 	obj.Object.Uuid = scene_element.Uuid
 	obj.Object.Matrix = []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 	obj.Geometries = []Geometry{g}
