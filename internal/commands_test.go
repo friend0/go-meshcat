@@ -12,11 +12,14 @@ func TestSetObjectSerialization(t *testing.T) {
 
 	original := SetObject{
 		Command: Command{
-			Type: "",
-			Path: "",
+			Type: "set_object",
+			Path: "/vehicles/vehicle_0",
 		},
 		Object: Scene{
-			Metadata:   SceneMetadata{},
+			Metadata: SceneMetadata{
+				Version: 4.5,
+				Type:    "BufferGeometry",
+			},
 			Geometries: []Geometry{},
 			Materials:  []Material{},
 			Object:     SceneObject{},

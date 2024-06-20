@@ -2,25 +2,37 @@ package internal
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"strconv"
+	"strings"
 
+	"github.com/friend0/transformations"
 	"github.com/gorilla/websocket"
 	"github.com/nats-io/nats.go"
 	"github.com/vmihailenco/msgpack/v5"
+	"gonum.org/v1/gonum/mat"
 )
 
 func (s *Server) NATSSubscriptions() error {
-	// enc.UseArrayEncodedStructs(true)
-	// enc.UseCompactFloats(true)
-	// enc.UseCompactInts(true)
-
 	// todo: track subscriptions so we can cleanup
 	_, err := s.urlSubscription()
 	if err != nil {
 		return err
 	}
 	_, err = s.setObjectSubscription()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.setGeometrySubscription()
+	if err != nil {
+		return err
+	}
+
+	_, err = s.setTransformationSubscription()
 	if err != nil {
 		return err
 	}
@@ -49,10 +61,8 @@ var MeshcatCommands = map[string]bool{
 }
 
 func (s *Server) urlSubscription() (*nats.Subscription, error) {
-
 	sub, err := s.NATS.QueueSubscribe("meshcat.url", "MESHCAT_URL_Q", func(msg *nats.Msg) {
 		b, err := msgpack.Marshal(&msg)
-		fmt.Println("Here")
 		if err != nil {
 			log.Printf("error sending msg: %v", err)
 		}
@@ -70,24 +80,91 @@ func (s *Server) urlSubscription() (*nats.Subscription, error) {
 	return sub, err
 }
 
-// SetObject handler
+type SetFromServerMetadata struct {
+	ResourceName string  `msgpack:"resource_name"`
+	Path         string  `msgpack:"path"`
+	PositionX    float64 `msgpack:"x"`
+	PositionY    float64 `msgpack:"y"`
+	PositionZ    float64 `msgpack:"z"`
+}
+
+type SetFromServer struct {
+	Command `msgpack:"command"`
+	Object  SetFromServerMetadata `msgpack:"object"`
+}
+
+// SetObjectSubscription handler
+
 func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
+
 	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
 		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
+
+		// let's say for now the message has the form "object_name path positionx positiony positionz"
+		cmd := strings.Split(string(msg.Data), " ")
+		object_name, path, x, y, z := cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]
+		fx, fy, fz, err := ParseFloats(x, y, z)
+		if err != nil {
+			s.Logger.Info(fmt.Sprintf("error processing position input in the command message %s", msg.Data))
+			return
+		}
+
+		err = enc.Encode(SetFromServer{
+			Object: SetFromServerMetadata{
+				ResourceName: object_name,
+				Path:         path,
+				PositionX:    fx,
+				PositionY:    fy,
+				PositionZ:    fz,
+			},
+			Command: Command{
+				Type: "set_object_from_server",
+				Path: path,
+			},
+		})
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("unable to build `SetFromServer` object: %v", err))
+			return
+		}
+
+		// Forward the message to the WebSocket server
+		if s.WS != nil {
+			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
+			if err != nil {
+				log.Printf("Error sending message to WebSocket server: %v", err)
+			}
+		} else {
+			fmt.Println("No WS conn")
+		}
+		buf.Reset()
+	})
+	if err != nil {
+		log.Fatalf("Error subscribing to NATS subject: %v", err)
+	}
+	return sub, err
+}
+
+// SetObject handler
+func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
+
+	sub, err := s.NATS.Subscribe("meshcat.geometries.*", func(msg *nats.Msg) {
+		var buf bytes.Buffer
+		enc := msgpack.NewEncoder(&buf)
+		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
+
+		// let's say for now the message has the form "object_name.path.positionx.positiony.positionz"
+		// todo: command parsing for Geometry message data
+		// based on the message type at the given path, parse the atrtibutes for the particular geometry
+
 		b := NewBox(1, 1, 1)
-		/* 		_, err := NewStarling(1.0, 1.0, 1.0)
-		   		if err != nil {
-		   			log.Printf("error during starling geometry creation")
-		   		} */
-		// s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS: %d", len(b)))
 		obj := Objectify(b)
 		err := enc.Encode(SetObject{
 			Object: obj,
 			Command: Command{
 				Type: "set_object",
-				Path: "meshcat/objects",
+				Path: "/boxes/o1",
 			}})
 
 		if err != nil {
@@ -108,6 +185,148 @@ func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 		log.Fatalf("Error subscribing to NATS subject: %v", err)
 	}
 	return sub, err
+}
+
+type TransformationCommand struct {
+	Matrix4     []float64 `msgpack:"matrix"`
+	Translation []float64 `msgpack:"translation"`
+	Rotation    []float64 `msgpack:"rotation"`
+	Scale       []float64 `msgpack:"scale"`
+}
+
+type SetTransformationCommand struct {
+	Command
+	Object TransformationCommand `msgpack:"object"`
+}
+
+// eulerToRotationMatrix converts Euler angles to a rotation matrix.
+// The Euler angles are represented as an array of 3 float64 values: [roll, pitch, yaw].
+// Converts to the aerospace sequence of rotations: ZYX, applied in order from right to left.
+func eulerToRotationMatrix(e [3]float64) *mat.Dense {
+	c1, s1 := math.Cos(e[0]), math.Sin(e[0])
+	c2, s2 := math.Cos(e[1]), math.Sin(e[1])
+	c3, s3 := math.Cos(e[2]), math.Sin(e[2])
+
+	return mat.NewDense(3, 3, []float64{
+		c2 * c3, c2 * s3, -s2,
+		c3*s1*s2 - c1*s3, c1*c3 + s1*s2*s3, c2 * s1,
+		c3*c1*s2 + s1*s3, c1*s2*s3 - c3*s1, c2 * c1,
+	})
+}
+
+func scalingMatrix(s [3]float64) *mat.Dense {
+	return mat.NewDense(4, 4, []float64{
+		s[0], 0, 0, 0,
+		0, s[1], 0, 0,
+		0, 0, s[2], 0,
+		0, 0, 0, 1,
+	})
+}
+
+func translationMatrix(t [3]float64) *mat.Dense {
+	return mat.NewDense(4, 4, []float64{
+		1, 0, 0, t[0],
+		0, 1, 0, t[1],
+		0, 0, 1, t[2],
+		0, 0, 0, 1,
+	})
+}
+
+func NewTransformation(data []byte) (transformation_matrix TransformationCommand, err error) {
+	err = json.Unmarshal(data, &transformation_matrix)
+	if err != nil {
+		return transformation_matrix, fmt.Errorf("unable to unmarshal transformation matrix: %v", err)
+	}
+
+	// check if Matrix4 is already specified, in which case, just return the result
+	if transformation_matrix.Matrix4 != nil && len(transformation_matrix.Matrix4) == 16 {
+		for _, v := range transformation_matrix.Matrix4 {
+			if v != 0.0 {
+				break
+			}
+		}
+		return transformation_matrix, nil
+	}
+
+	// determine rotation type, normalize to quaternion
+	rotation := transformation_matrix.Rotation
+	if rotation == nil {
+		rotation = []float64{0, 0, 0, 1}
+	} else if len(rotation) == 3 {
+		// euler to quaternion
+		rotation, err = transformations.EulerToQuaternion(([3]float64)(rotation))
+		if err != nil {
+			return transformation_matrix, fmt.Errorf("unable to convert euler angles to quaternion: %v", err)
+		}
+	} else if len(rotation) == 4 {
+		// determine if the quaternion is valid, and normalized
+		rotation = transformations.NewQuaternionFromSlice(rotation)
+	}
+	transformation_matrix.Rotation = rotation
+
+	// todo: handle scaling matrix. Not a high priority for now
+	return transformation_matrix, nil
+}
+
+// SetObject handler
+func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
+
+	sub, err := s.NATS.Subscribe("meshcat.transformations.>", func(msg *nats.Msg) {
+		var buf bytes.Buffer
+		enc := msgpack.NewEncoder(&buf)
+		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
+		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
+		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
+
+		transformation_matrix, err := NewTransformation(msg.Data)
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("unable to build `TransformationCommand` object: %v", err))
+			return
+		}
+		// todo: implement some kind of command to matrix function to allow for representing heterogeneous transformations specifications into the 4x4
+		// translation matrix expected by three.js
+		s.Logger.Info(fmt.Sprintf("transformation matrix: %v", transformation_matrix))
+		err = enc.Encode(SetTransformationCommand{
+			Object: transformation_matrix,
+			Command: Command{
+				Type: "set_transform",
+				Path: path,
+			}})
+
+		if err != nil {
+			log.Printf("error sending msg: %v", err)
+		}
+		// Forward the message to the WebSocket server
+		if s.WS != nil {
+			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
+			if err != nil {
+				log.Printf("Error sending message to WebSocket server: %v", err)
+			}
+		} else {
+			fmt.Println("No WS conn")
+		}
+		buf.Reset()
+	})
+	if err != nil {
+		log.Fatalf("Error subscribing to NATS subject: %v", err)
+	}
+	return sub, err
+}
+
+func ParseFloats(x, y, z string) (fx, fy, fz float64, err error) {
+	fx, err = strconv.ParseFloat(x, 64)
+	if err != nil {
+		return fx, fy, fz, err
+	}
+	fy, err = strconv.ParseFloat(y, 64)
+	if err != nil {
+		return fx, fy, fz, err
+	}
+	fz, err = strconv.ParseFloat(z, 64)
+	if err != nil {
+		return fx, fy, fz, err
+	}
+	return fx, fy, fz, err
 }
 
 func (s *Server) setTransform() (*nats.Subscription, error) {

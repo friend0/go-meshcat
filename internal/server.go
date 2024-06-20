@@ -11,7 +11,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 type Server struct {
@@ -43,9 +42,10 @@ func nats_connect() (*nats.Conn, error) {
 	expBackoff := backoff.NewExponentialBackOff()
 	expBackoff.MaxElapsedTime = 1 * time.Minute // Maximum total retry time
 	var nc *nats.Conn
-	err := backoff.Retry(
+	nats_url, err := Getenv("NATS_URL", nats.DefaultURL)
+	err = backoff.Retry(
 		func() (err error) {
-			nc, err = nats.Connect(viper.GetString("NATS_URL"))
+			nc, err = nats.Connect(nats_url)
 			if err != nil {
 				slog.Debug("failed to connect to NATS", err)
 				return errors.Wrap(err, "failed to connect to NATS")

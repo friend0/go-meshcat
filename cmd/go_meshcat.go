@@ -11,13 +11,15 @@ import (
 	"time"
 
 	"github.com/friend0/go-meshcat/internal"
-	"github.com/nats-io/nats.go"
-	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
 )
 
 func run(ctx context.Context) (err error) {
-	viper.SetDefault("MAX_NATS_CONNECT_RETRIES", 5)
-	viper.SetDefault("NATS_URL", nats.DefaultURL)
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+		return err
+	}
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	s, err := internal.NewServer(ctx)
 	if err != nil {

@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  # pre_cmd = ["&nats-server"]
+  pre_cmd = ["&nats-server"]
   cmd = "go build -o ./build/app.bin ./cmd/go_meshcat.go"
   # post_cmd = ["nats-server --signal quit"]
   args_bin = []

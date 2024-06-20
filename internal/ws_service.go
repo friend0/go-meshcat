@@ -21,7 +21,7 @@ var pongWait = 60 * time.Second
 // Define the WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	WriteBufferSize: 8192,
 	WriteBufferPool: &sync.Pool{},
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -55,7 +55,6 @@ func (s *Server) WsHandler() echo.HandlerFunc {
 		// Upgrade the HTTP connection to a WebSocket connection
 		ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 		if err != nil {
-			log.Println("Upgrade:", err)
 			return err
 		}
 		ws.SetWriteDeadline(time.Now().Add(pongWait))
