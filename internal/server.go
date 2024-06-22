@@ -18,6 +18,7 @@ type Server struct {
 	NATS   *nats.Conn
 	WS     *websocket.Conn
 	Logger *slog.Logger
+	Q      WorkQueue
 }
 
 func NewServer(ctx context.Context) (*Server, error) {
@@ -31,6 +32,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		Router: r,
 		NATS:   nc,
 	}
+	s.InitializeWorkQueue(10, 100, nc)
 	s.Logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	s.Routes()

@@ -3,13 +3,13 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  pre_cmd = ["&nats-server"]
+  pre_cmd = [""]
   cmd = "go build -o ./build/app.bin ./cmd/go_meshcat.go"
-  # post_cmd = ["nats-server --signal quit"]
+  post_cmd = ["nats-server --signal quit"]
   args_bin = []
   bin = "./build/app.bin"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "web", "node_modules"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false

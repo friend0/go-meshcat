@@ -37,7 +37,7 @@ func (s *Server) NATSSubscriptions() error {
 		return err
 	}
 
-	_, err = s.setTransform()
+	_, err = s.missionSubscription()
 	if err != nil {
 		return err
 	}
@@ -272,19 +272,18 @@ func NewTransformation(data []byte) (transformation_matrix TransformationCommand
 func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 
 	sub, err := s.NATS.Subscribe("meshcat.transformations.>", func(msg *nats.Msg) {
-		var buf bytes.Buffer
-		enc := msgpack.NewEncoder(&buf)
-		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
 		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
+
+		var buf bytes.Buffer
+		enc := msgpack.NewEncoder(&buf)
 
 		transformation_matrix, err := NewTransformation(msg.Data)
 		if err != nil {
 			s.Logger.Error(fmt.Sprintf("unable to build `TransformationCommand` object: %v", err))
 			return
 		}
-		// todo: implement some kind of command to matrix function to allow for representing heterogeneous transformations specifications into the 4x4
-		// translation matrix expected by three.js
+
 		s.Logger.Info(fmt.Sprintf("transformation matrix: %v", transformation_matrix))
 		err = enc.Encode(SetTransformationCommand{
 			Object: transformation_matrix,
@@ -292,10 +291,10 @@ func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 				Type: "set_transform",
 				Path: path,
 			}})
-
 		if err != nil {
 			log.Printf("error sending msg: %v", err)
 		}
+
 		// Forward the message to the WebSocket server
 		if s.WS != nil {
 			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
@@ -306,6 +305,21 @@ func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 			fmt.Println("No WS conn")
 		}
 		buf.Reset()
+	})
+	if err != nil {
+		log.Fatalf("Error subscribing to NATS subject: %v", err)
+	}
+	return sub, err
+}
+
+func (s *Server) missionSubscription() (*nats.Subscription, error) {
+	sub, err := s.NATS.Subscribe("meshcat.mission.>", func(msg *nats.Msg) {
+		path := []string{"meshcat.transformations"}
+		path = append(path, strings.Join(strings.Split(string(msg.Subject), ".")[2:], "."))
+		full_path := strings.Join(path, ".")
+
+		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS: %s on path %s", string(msg.Data), path))
+		s.Q.Add(MissionWork{Conn: s.NATS, Path: full_path, Type: "orbit", Radius: 1, Omega: 1})
 	})
 	if err != nil {
 		log.Fatalf("Error subscribing to NATS subject: %v", err)
@@ -327,10 +341,6 @@ func ParseFloats(x, y, z string) (fx, fy, fz float64, err error) {
 		return fx, fy, fz, err
 	}
 	return fx, fy, fz, err
-}
-
-func (s *Server) setTransform() (*nats.Subscription, error) {
-	return nil, nil
 }
 
 func (s *Server) delete() (*nats.Subscription, error) {
