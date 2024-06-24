@@ -20,6 +20,35 @@ type SceneElement struct {
 	Type string `json:"type" msgpack:"type"`
 }
 
+type GenericGeom map[string]interface{}
+
+func (g GenericGeom) get_element() SceneElement {
+  if g["uuid"] == nil {
+    g["uuid"] = uuid.NewString()
+  }
+  if g["type"] == nil {
+    g["type"] = "BoxGeometry"
+  }
+	return SceneElement{
+		Uuid: g["uuid"].(string),
+		Type: g["type"].(string),
+	}
+}
+
+func (geom GenericGeom) init_element() error {
+	_type, ok := geom["type"].(string)
+	if !ok {
+		return fmt.Errorf("Geometry type not found")
+	}
+	scene_element := SceneElement{
+		Uuid: uuid.NewString(),
+		Type: _type,
+	}
+	geom["uuid"] = scene_element.Uuid
+	geom["type"] = scene_element.Type
+	return nil
+}
+
 // SceneObject is a like join, where the tables being joined are the elements
 // of Scene.Geometries, and Scene.Materials, respectively.
 // The Scene object itself also gets a UUID, and this is where the transformation matrix is spefied.
@@ -46,6 +75,7 @@ func NewScene() Scene {
 		Object:     SceneObject{},
 	}
 }
+
 func default_scene_metadata() SceneMetadata {
 	return SceneMetadata{
 		Version: 4.5,
@@ -55,6 +85,7 @@ func default_scene_metadata() SceneMetadata {
 
 type Geometry interface {
 	get_element() SceneElement
+	init_element() error
 }
 
 type Box struct {
@@ -64,8 +95,16 @@ type Box struct {
 	Depth  float32 `json:"depth" msgpack:"depth"`
 }
 
-func (b Box) get_element() SceneElement {
+func (b *Box) get_element() SceneElement {
 	return b.SceneElement
+}
+
+func (b *Box) init_element() error {
+	b.SceneElement = SceneElement{
+		Uuid: uuid.NewString(),
+		Type: "BoxGeometry",
+	}
+  return nil
 }
 
 func NewBox(width, height, depth float32) Box {
@@ -78,6 +117,33 @@ func NewBox(width, height, depth float32) Box {
 		Height: height,
 		Depth:  depth,
 	}
+}
+
+type Sphere struct {
+	SceneElement
+	Radius float32 `json:"radius" msgpack:"radius"`
+}
+
+func NewSphere(radius float32) Sphere {
+	return Sphere{
+		SceneElement: SceneElement{
+			Uuid: uuid.NewString(),
+			Type: "SphereGeometry",
+		},
+		Radius: radius,
+	}
+}
+
+func (s *Sphere) get_element() SceneElement {
+	return s.SceneElement
+}
+
+func (s *Sphere) init_element() error {
+	s.SceneElement = SceneElement{
+		Uuid: uuid.NewString(),
+		Type: "SphereGeometry",
+	}
+  return nil
 }
 
 type MeshGeometry struct {
