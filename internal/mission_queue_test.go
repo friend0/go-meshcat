@@ -34,15 +34,16 @@ func TestLinspace(t *testing.T) {
 }
 
 func TestWorkQueue(t *testing.T) {
-	wq := NewWorkQueue(5, 10, nil)
-	wq.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
-	wq.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
-	wq.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
+  s := Server{}
+  s.InitializeWorkQueue(2, 10, nil)
+	s.Q.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
+	s.Q.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
+	s.Q.Add(MissionWork{Type: "orbit", Waypoints: [][]float64{{0, 0}, {1, 1}}})
 	for i := 0; i < 3; i++ {
-		result := <-wq.Results
+		result := <-s.Q.Results
 		fmt.Println(result)
 	}
-	wq.Close()
+	s.Q.Close()
 }
 
 func mock_publisher(wp []float64, w io.Writer) error {
