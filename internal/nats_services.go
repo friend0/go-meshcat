@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/friend0/transformations"
-	"github.com/gorilla/websocket"
 	"github.com/nats-io/nats.go"
 	"github.com/vmihailenco/msgpack/v5"
 	"gonum.org/v1/gonum/mat"
@@ -22,11 +21,19 @@ func (s *Server) NATSSubscriptions() error {
 	if err != nil {
 		return err
 	}
+
+	// todo: not able to write objects to the browser directly via websocket,
+	// right now we tell the browser to fetch the file from the server,
+	// and for some reason that works. Suspect issue with serialization/deserialization pipeline from nats -> msgpack -> ws
+	// somewhat lower priority for now, given that we're still able to load objects. Will be much more flexible if we can load the objects directly.
+
+	// Manage requests to add mesh objects
 	_, err = s.setObjectSubscription()
 	if err != nil {
 		return err
 	}
 
+	// Add stock geometry objects, like boxes, spheres, etc.
 	_, err = s.setGeometrySubscription()
 	if err != nil {
 		return err
@@ -64,18 +71,15 @@ func (s *Server) urlSubscription() (*nats.Subscription, error) {
 	sub, err := s.NATS.QueueSubscribe("meshcat.url", "MESHCAT_URL_Q", func(msg *nats.Msg) {
 		b, err := msgpack.Marshal(&msg)
 		if err != nil {
-			log.Printf("error sending msg: %v", err)
+      s.Logger.Error(fmt.Sprintf("error encoding message: %v", err)) 
 		}
-		if s.WS != nil {
-			s.WS.WriteMessage(websocket.BinaryMessage, b)
-			_, m, _ := s.WS.ReadMessage()
-			log.Printf("read one %v", m)
-		} else {
-			log.Printf("no ws conn")
-		}
+		err = s.Hub.Write(b)
+    if err != nil {
+      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
+    }
 	})
 	if err != nil {
-		log.Fatalf("Error subscribing to NATS subject: %v", err)
+    s.Logger.Error(fmt.Sprintf("error creating NATS subscription: %v", err)) 
 	}
 	return sub, err
 }
@@ -94,12 +98,11 @@ type SetFromServer struct {
 }
 
 // SetObjectSubscription handler
-
 func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 
 	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
-		var buf bytes.Buffer
-		enc := msgpack.NewEncoder(&buf)
+		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
+		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
 		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
 
 		// let's say for now the message has the form "object_name path positionx positiony positionz"
@@ -111,6 +114,8 @@ func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 			return
 		}
 
+		var buf bytes.Buffer
+		enc := msgpack.NewEncoder(&buf)
 		err = enc.Encode(SetFromServer{
 			Object: SetFromServerMetadata{
 				ResourceName: object_name,
@@ -130,14 +135,10 @@ func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 		}
 
 		// Forward the message to the WebSocket server
-		if s.WS != nil {
-			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
-			if err != nil {
-				log.Printf("Error sending message to WebSocket server: %v", err)
-			}
-		} else {
-			fmt.Println("No WS conn")
-		}
+		err = s.Hub.Write(buf.Bytes())
+    if err != nil {
+      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
+    }
 		buf.Reset()
 	})
 	if err != nil {
@@ -146,39 +147,86 @@ func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 	return sub, err
 }
 
+type AddObject struct {
+	Geometry Geometry  `msgpack:"geometry"`
+	Path     string    `msgpack:"path"`
+	Position []float64 `msgpack:"position"`
+}
+
 // SetObject handler
 func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
 
-	sub, err := s.NATS.Subscribe("meshcat.geometries.*", func(msg *nats.Msg) {
+	sub, err := s.NATS.Subscribe("meshcat.geometries", func(msg *nats.Msg) {
+		// shape := strings.Split(string(msg.Subject), ".")[2]
+    shape := ""
+		// todo: check here to see if the shape is available
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
-		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
+    log.Printf("Received meshcat message from NATS: %s: shape %s", string(msg.Data), shape)
 
 		// let's say for now the message has the form "object_name.path.positionx.positiony.positionz"
 		// todo: command parsing for Geometry message data
 		// based on the message type at the given path, parse the atrtibutes for the particular geometry
 
-		b := NewBox(1, 1, 1)
-		obj := Objectify(b)
-		err := enc.Encode(SetObject{
-			Object: obj,
-			Command: Command{
-				Type: "set_object",
-				Path: "/boxes/o1",
-			}})
-
-		if err != nil {
-			log.Printf("error sending msg: %v", err)
-		}
-		// Forward the message to the WebSocket server
-		if s.WS != nil {
-			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
+		// let's say for now the message has the form "object_name path positionx positiony positionz"
+		if shape == "box" {
+			box := Box{}
+			err := json.Unmarshal(msg.Data, &box)
 			if err != nil {
-				log.Printf("Error sending message to WebSocket server: %v", err)
+				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+				return
+			}
+      box.init_element()
+			obj := Objectify(&box)
+			err = enc.Encode(SetObject{
+				Object: obj,
+				Command: Command{
+					Type: "set_object",
+					Path: "environment/box_geometries",
+				}})
+			if err != nil {
+				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+			}
+		} else if shape == "sphere" {
+			sphere := Sphere{}
+			err := json.Unmarshal(msg.Data, &sphere)
+			if err != nil {
+				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+				return
+			}
+      sphere.init_element()
+      s.Logger.Info(fmt.Sprintf("sphere: %#v", sphere))
+			obj := Objectify(&sphere)
+			err = enc.Encode(SetObject{
+				Object: obj,
+				Command: Command{
+					Type: "set_object",
+          Path: "environment/sphere_geometries", 
+				}})
+			if err != nil {
+				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
 			}
 		} else {
-			fmt.Println("No WS conn")
-		}
+      var geom GenericGeom
+      err := json.Unmarshal(msg.Data, &geom)
+      if err != nil {
+				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+      }
+      geom.init_element()
+      obj := Objectify(geom)
+      err = enc.Encode(SetObject{
+        Object: obj,
+        Command: Command {
+          Type: "set_object",
+          Path: fmt.Sprintf("environment/%v", "geometries"),
+        },
+      }) 
+    }
+		// Forward the message to the WebSocket server
+    err := s.Hub.Write(buf.Bytes())
+    if err != nil {
+      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
+    }
 		buf.Reset()
 	})
 	if err != nil {
@@ -296,14 +344,10 @@ func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 		}
 
 		// Forward the message to the WebSocket server
-		if s.WS != nil {
-			err := s.WS.WriteMessage(websocket.BinaryMessage, buf.Bytes())
-			if err != nil {
-				log.Printf("Error sending message to WebSocket server: %v", err)
-			}
-		} else {
-			fmt.Println("No WS conn")
-		}
+    err = s.Hub.Write(buf.Bytes())
+    if err != nil {
+      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
+    }
 		buf.Reset()
 	})
 	if err != nil {
