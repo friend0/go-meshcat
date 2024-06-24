@@ -2,12 +2,12 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 	"github.com/nats-io/nats.go"
 	"github.com/pkg/errors"
@@ -16,7 +16,7 @@ import (
 type Server struct {
 	Router *echo.Echo
 	NATS   *nats.Conn
-	WS     *websocket.Conn
+	Hub    *Hub
 	Logger *slog.Logger
 	Q      WorkQueue
 }
@@ -33,6 +33,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		NATS:   nc,
 	}
 	s.InitializeWorkQueue(10, 100, nc)
+	s.Hub = NewHub()
 	s.Logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	s.Routes()
@@ -49,7 +50,7 @@ func nats_connect() (*nats.Conn, error) {
 		func() (err error) {
 			nc, err = nats.Connect(nats_url)
 			if err != nil {
-				slog.Debug("failed to connect to NATS", err)
+				slog.Debug(fmt.Sprintf("failed to connect to NATS %v", err))
 				return errors.Wrap(err, "failed to connect to NATS")
 			}
 			return nil
