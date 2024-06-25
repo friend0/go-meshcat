@@ -9,20 +9,19 @@ import (
 )
 
 func TestSetObjectSerialization(t *testing.T) {
-
 	original := SetObject{
 		Command: Command{
 			Type: "set_object",
 			Path: "/vehicles/vehicle_0",
 		},
-		Object: Scene{
+		Object: ThreeObject{
 			Metadata: SceneMetadata{
 				Version: 4.5,
 				Type:    "BufferGeometry",
 			},
 			Geometries: []Geometry{},
 			Materials:  []Material{},
-			Object:     SceneObject{},
+			Object:     Object{},
 		},
 	}
 
@@ -47,5 +46,4 @@ func TestSetObjectSerialization(t *testing.T) {
 		t.Errorf("expected Type %s, got %s", original.Type, deserialized.Type)
 	}
 	log.Printf("%#v", buf)
-
 }

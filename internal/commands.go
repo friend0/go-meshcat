@@ -7,7 +7,7 @@ type Command struct {
 
 type SetObject struct {
 	Command
-	Object Scene `json:"object" msgpack:"object"`
+	Object ThreeObject `json:"object" msgpack:"object"`
 }
 
 type SetTransform struct {
@@ -20,15 +20,15 @@ type Delete struct {
 }
 
 type SetAnimation struct {
-	Command
 	Animations interface{}
-	Options    AnimationOptions
+	Command
+	Options AnimationOptions
 }
 
 type SetProperty struct {
+	Value interface{}
 	Command
 	SetProperty string
-	Value       interface{}
 }
 
 type CaptureImage struct {
