@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -10,65 +11,6 @@ import (
 
 	"github.com/nats-io/nats.go"
 )
-
-type Work interface {
-	Do(results chan string)
-}
-
-type WorkQueue struct {
-	Q       chan Work
-	Results chan string
-	NATS    *nats.Conn
-}
-
-func (s *Server) InitializeWorkQueue(workers int, queue_size int, conn *nats.Conn) {
-	wq := WorkQueue{
-		Q:       make(chan Work, queue_size),
-		Results: make(chan string, queue_size),
-		NATS:    conn,
-	}
-	for i := range workers {
-		go MissionWorker(i, wq)
-	}
-	// go wq.Gather()
-	s.Q = wq
-}
-
-func (wq *WorkQueue) Add(work Work) {
-	wq.Q <- work
-}
-
-func (wq *WorkQueue) Get() Work {
-	return <-wq.Q
-}
-
-func (wq *WorkQueue) Close() {
-	close(wq.Q)
-	close(wq.Results)
-}
-
-func MissionWorker(id int, wq WorkQueue) {
-	for {
-		work := wq.Get()
-		fmt.Println("Worker", id, "started job")
-		work.Do(wq.Results)
-	}
-}
-
-func (wq *WorkQueue) Gather() {
-	for r := range wq.Results {
-		fmt.Printf("Result: %s\n", r)
-	}
-}
-
-type MissionWork struct {
-	Path      string
-	Type      string
-	Radius    float64
-	Omega     float64
-	Waypoints [][]float64
-	Conn      *nats.Conn
-}
 
 type Waypoint [][]float64
 
@@ -100,17 +42,75 @@ func Circspace(low, high, radius float64, n int) [][]float64 {
 	return res
 }
 
+type Work interface {
+	Do(results chan string)
+}
+
+type WorkQueue struct {
+	Q       chan Work
+	Results chan string
+	NATS    *nats.Conn
+}
+
+func (s *Server) InitializeWorkQueue(workers int, queue_size int, conn *nats.Conn) {
+	wq := WorkQueue{
+		Q:       make(chan Work, queue_size),
+		Results: make(chan string, queue_size),
+		NATS:    conn,
+	}
+	for i := range workers {
+		go MissionWorker(i, wq)
+	}
+	// go wq.Gather()
+	s.Q = wq
+}
+
+func (wq *WorkQueue) Add(work Work) error {
+	select {
+	case wq.Q <- work:
+		return nil
+	default:
+		return errors.New("work channel full")
+	}
+}
+
+func (wq *WorkQueue) Get() Work {
+	return <-wq.Q
+}
+
+func (wq *WorkQueue) Close() {
+	close(wq.Q)
+	close(wq.Results)
+}
+
+func MissionWorker(id int, wq WorkQueue) {
+	fmt.Println(wq.Results)
+	for work := range wq.Q {
+		fmt.Println("Worker", id, "started job")
+		work.Do(wq.Results)
+	}
+}
+
+type MissionWork struct {
+	Conn      *nats.Conn
+	Path      string
+	Type      string
+	Waypoints [][]float64
+	Radius    float64
+	Omega     float64
+}
+
 type NatsMissionWriter struct {
 	Conn *nats.Conn
 	Path string
 }
 
 func (nmw NatsMissionWriter) Write(p []byte) (n int, err error) {
-	fmt.Printf("Publishing %v to %s", string(p), nmw.Path)
+	if nmw.Conn == nil {
+		return 0, errors.New("NATS connection not initialized")
+	}
 	err = nmw.Conn.Publish(nmw.Path, p)
 	if err != nil {
-		fmt.Println("Error publishing to NATS")
-		fmt.Println(err)
 		return 0, err
 	}
 	return len(p), nil
@@ -130,13 +130,15 @@ func transform_publisher(wp []float64, w io.Writer) error {
 
 func WaypointIterator(sink io.Writer, waypoints [][]float64, transform_publisher func([]float64, io.Writer) error, ts time.Duration) {
 	var wg sync.WaitGroup
+	if ts == 0 {
+		ts = 1
+	}
 	ticker := time.NewTicker(ts)
 	wg.Add(1)
 	go func(waypoints [][]float64) {
 		defer wg.Done()
 		for _, wp := range waypoints {
 			<-ticker.C
-			fmt.Println("tick")
 			if len(wp) == 4 {
 				ticker.Reset(time.Duration(wp[3]) * time.Millisecond)
 			}
