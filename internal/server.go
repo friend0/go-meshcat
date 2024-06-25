@@ -46,6 +46,9 @@ func nats_connect() (*nats.Conn, error) {
 	expBackoff.MaxElapsedTime = 1 * time.Minute // Maximum total retry time
 	var nc *nats.Conn
 	nats_url, err := Getenv("NATS_URL", nats.DefaultURL)
+	if err != nil {
+		return nil, err
+	}
 	err = backoff.Retry(
 		func() (err error) {
 			nc, err = nats.Connect(nats_url)
