@@ -11,8 +11,8 @@ import (
 
 // Define the
 type SceneMetadata struct {
-	Version float32 `json:"version" msgpack:"version"`
 	Type    string  `json:"type" msgpack:"type"`
+	Version float32 `json:"version" msgpack:"version"`
 }
 
 type SceneElement struct {
@@ -23,12 +23,18 @@ type SceneElement struct {
 type GenericGeom map[string]interface{}
 
 func (g GenericGeom) get_element() SceneElement {
-  if g["uuid"] == nil {
-    g["uuid"] = uuid.NewString()
-  }
-  if g["type"] == nil {
-    g["type"] = "BoxGeometry"
-  }
+	if g["uuid"] == nil {
+		g["uuid"] = uuid.NewString()
+	}
+	if g["type"] == nil {
+		if _, ok := g["radius"]; ok {
+			g["type"] = "SphereGeometry"
+		} else if _, ok := g["width"]; ok {
+			g["type"] = "BoxGeometry"
+		} else {
+			g["type"] = "_meshfile_geometry"
+		}
+	}
 	return SceneElement{
 		Uuid: g["uuid"].(string),
 		Type: g["type"].(string),
@@ -38,6 +44,7 @@ func (g GenericGeom) get_element() SceneElement {
 func (geom GenericGeom) init_element() error {
 	_type, ok := geom["type"].(string)
 	if !ok {
+		// todo: determine the type base on attributes
 		return fmt.Errorf("Geometry type not found")
 	}
 	scene_element := SceneElement{
@@ -49,30 +56,30 @@ func (geom GenericGeom) init_element() error {
 	return nil
 }
 
-// SceneObject is a like join, where the tables being joined are the elements
+// Object is a like join, where the tables being joined are the elements
 // of Scene.Geometries, and Scene.Materials, respectively.
 // The Scene object itself also gets a UUID, and this is where the transformation matrix is spefied.
-type SceneObject struct {
+type Object struct {
 	SceneElement
 	GeometryUUID string    `json:"geometry" msgpack:"geometry"`
 	MaterialUUID string    `json:"material" msgpack:"material"`
 	Matrix       []float32 `json:"matrix" msgpack:"matrix,omitempty"`
 }
 
-// Scene contains the geometries and materials that have been defined on the
-type Scene struct {
+// ThreeObject contains the geometries and materials that have been defined on the
+type ThreeObject struct {
 	Metadata   SceneMetadata `json:"metadata" msgpack:"metadata"`
 	Geometries []Geometry    `json:"geometries" msgpack:"geometries"`
 	Materials  []Material    `json:"materials" msgpack:"materials"`
-	Object     SceneObject   `json:"object" msgpack:"object"`
+	Object     Object        `json:"object" msgpack:"object"`
 }
 
-func NewScene() Scene {
-	return Scene{
+func NewScene() ThreeObject {
+	return ThreeObject{
 		Metadata:   default_scene_metadata(),
 		Geometries: []Geometry{},
 		Materials:  []Material{},
-		Object:     SceneObject{},
+		Object:     Object{},
 	}
 }
 
@@ -104,7 +111,7 @@ func (b *Box) init_element() error {
 		Uuid: uuid.NewString(),
 		Type: "BoxGeometry",
 	}
-  return nil
+	return nil
 }
 
 func NewBox(width, height, depth float32) Box {
@@ -143,7 +150,7 @@ func (s *Sphere) init_element() error {
 		Uuid: uuid.NewString(),
 		Type: "SphereGeometry",
 	}
-  return nil
+	return nil
 }
 
 type MeshGeometry struct {
@@ -163,7 +170,7 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 		log.Fatal(err)
 		return MeshGeometry{}, err
 	}
-	fmt.Println(data)
+	fmt.Println(string(data))
 	return MeshGeometry{
 		SceneElement: SceneElement{
 			Uuid: "cef79e52-526d-4263-b595-04fa2705974e",
@@ -172,17 +179,16 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 		Format: "stl",
 		Data:   data,
 	}, nil
-
 }
 
-func Objectify[T Geometry](g T) Scene {
+func Objectify[T Geometry](g T) ThreeObject {
 	scene_element := g.get_element()
 	obj := NewScene()
 	obj.Object.GeometryUUID = scene_element.Uuid
 	obj.Object.MaterialUUID = DEFAULT_MATERIAL
 	obj.Object.Type = "Mesh"
 	obj.Object.Uuid = scene_element.Uuid
-	// obj.Object.Matrix = []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+	obj.Object.Matrix = []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 	obj.Geometries = []Geometry{g}
 	obj.Materials = []Material{NewLambertMaterial()}
 	return obj
