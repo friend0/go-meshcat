@@ -154,9 +154,8 @@ type AddObject struct {
 
 // SetObject handler
 func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
-	sub, err := s.NATS.Subscribe("meshcat.geometries", func(msg *nats.Msg) {
-		// shape := strings.Split(string(msg.Subject), ".")[2]
-		shape := ""
+	sub, err := s.NATS.Subscribe("meshcat.geometries.*", func(msg *nats.Msg) {
+		shape := strings.Split(string(msg.Subject), ".")[2]
 		// todo: check here to see if the shape is available
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
@@ -167,62 +166,38 @@ func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
 		// based on the message type at the given path, parse the atrtibutes for the particular geometry
 
 		// let's say for now the message has the form "object_name path positionx positiony positionz"
-		if shape == "box" {
-			box := Box{}
-			err := json.Unmarshal(msg.Data, &box)
-			if err != nil {
-				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
-				return
-			}
-			box.init_element()
-			obj := Objectify(&box)
-			err = enc.Encode(SetObject{
-				Object: obj,
-				Command: Command{
-					Type: "set_object",
-					Path: "environment/box_geometries",
-				},
-			})
-			if err != nil {
-				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
-			}
-		} else if shape == "sphere" {
-			sphere := Sphere{}
-			err := json.Unmarshal(msg.Data, &sphere)
-			if err != nil {
-				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
-				return
-			}
-      sphere.init_element()
-      s.Logger.Info(fmt.Sprintf("sphere: %#v", sphere))
-			obj := Objectify(&sphere)
-			err = enc.Encode(SetObject{
-				Object: obj,
-				Command: Command{
-					Type: "set_object",
-          Path: "environment/sphere_geometries", 
-				}})
-			if err != nil {
-				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
-			}
-		} else {
-      var geom GenericGeom
-      err := json.Unmarshal(msg.Data, &geom)
-      if err != nil {
-				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
-      }
-      geom.init_element()
-      obj := Objectify(geom)
-      err = enc.Encode(SetObject{
-        Object: obj,
-        Command: Command {
-          Type: "set_object",
-          Path: fmt.Sprintf("environment/%v", "geometries"),
-        },
-      }) 
-    }
+
+		var geom Geometry
+		switch shape {
+		case "box":
+			geom = &Box{}
+		case "sphere":
+			geom = &Sphere{}
+		default:
+			geom = &BufferGeom{}
+			// fmt.Println("Unknown shape")
+
+		}
+		err := json.Unmarshal(msg.Data, &geom)
+		if err != nil {
+			s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+			return
+		}
+		fmt.Println("Parsed buffer geometry", geom)
+		geom.init_element()
+		obj := Objectify(geom)
+		err = enc.Encode(SetObject{
+			Object: obj,
+			Command: Command{
+				Type: "set_object",
+				Path: fmt.Sprintf("environment/scenic/%v", obj.Object.Uuid),
+			},
+		})
+		if err != nil {
+			s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
+		}
 		// Forward the message to the WebSocket server
-		err := s.Hub.Write(buf.Bytes())
+		err = s.Hub.Write(buf.Bytes())
 		if err != nil {
 			s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err))
 		}
