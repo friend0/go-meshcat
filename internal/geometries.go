@@ -27,12 +27,16 @@ func (g GenericGeom) get_element() SceneElement {
 		g["uuid"] = uuid.NewString()
 	}
 	if g["type"] == nil {
-		if _, ok := g["radius"]; ok {
-			g["type"] = "SphereGeometry"
-		} else if _, ok := g["width"]; ok {
-			g["type"] = "BoxGeometry"
+		if g["shape"] != nil {
+			g["type"], _ = g["shape"].(string)
 		} else {
-			g["type"] = "_meshfile_geometry"
+			if _, ok := g["radius"]; ok {
+				g["type"] = "SphereGeometry"
+			} else if _, ok := g["width"]; ok {
+				g["type"] = "BoxGeometry"
+			} else {
+				g["type"] = "_meshfile_geometry"
+			}
 		}
 	}
 	return SceneElement{
@@ -170,7 +174,6 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 		log.Fatal(err)
 		return MeshGeometry{}, err
 	}
-	fmt.Println(string(data))
 	return MeshGeometry{
 		SceneElement: SceneElement{
 			Uuid: "cef79e52-526d-4263-b595-04fa2705974e",
