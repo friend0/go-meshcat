@@ -20,15 +20,56 @@ type SceneElement struct {
 	Type string `json:"type" msgpack:"type"`
 }
 
+type BufferGeometryDataAttributes struct {
+	Position []float32 `json:"position" msgpack:"position"`
+	Normal   []float32 `json:"normal" msgpack:"normal"`
+	UV       []float32 `json:"uv" msgpack:"uv"`
+}
+
+type BufferGeometryData struct {
+	BufferGeometryDataAttributes `json:"attributes,omitempty" msgpack:"attributes,omitempty"`
+	BoundingSphere               Sphere `json:"boundingSphere,omitempty" msgpack:"boundingSphere,omitempty"`
+}
+
+type BufferGeom struct {
+	Uuid               string    `json:"uuid" msgpack:"uuid"`
+	Type               string    `json:"type" msgpack:"type"`
+	Height             float32   `json:"height" msgpack:"height,omitempty"`
+	Width              float32   `json:"width" msgpack:"width,omitempty"`
+	Depth              float32   `json:"depth" msgpack:"depth,omitempty"`
+	Radius             float32   `json:"radius" msgpack:"radius,omitempty"`
+	Position           []float32 `json:"position" msgpack:"position,omitempty"`
+	BufferGeometryData `json:"data" msgpack:"data"`
+}
+
+func (b *BufferGeom) init_element() error {
+	if b.Uuid == "" {
+		b.Uuid = uuid.NewString()
+	}
+	if b.Type == "" {
+		b.Type = "BufferGeometry"
+	}
+	b.Position = []float32{0, 0, 0}
+
+	return nil
+}
+
+func (b BufferGeom) get_element() SceneElement {
+	return SceneElement{
+		Uuid: b.Uuid,
+		Type: b.Type,
+	}
+}
+
 type GenericGeom map[string]interface{}
 
 func (g GenericGeom) get_element() SceneElement {
-  if g["uuid"] == nil {
-    g["uuid"] = uuid.NewString()
-  }
-  if g["type"] == nil {
-    g["type"] = "BoxGeometry"
-  }
+	if g["uuid"] == nil {
+		g["uuid"] = uuid.NewString()
+	}
+	if g["type"] == nil {
+		g["type"] = "BoxGeometry"
+	}
 	return SceneElement{
 		Uuid: g["uuid"].(string),
 		Type: g["type"].(string),
@@ -104,11 +145,11 @@ func (b *Box) init_element() error {
 		Uuid: uuid.NewString(),
 		Type: "BoxGeometry",
 	}
-  return nil
+	return nil
 }
 
-func NewBox(width, height, depth float32) Box {
-	return Box{
+func NewBox(width, height, depth float32) *Box {
+	return &Box{
 		SceneElement: SceneElement{
 			Uuid: uuid.NewString(),
 			Type: "BoxGeometry",
@@ -124,8 +165,8 @@ type Sphere struct {
 	Radius float32 `json:"radius" msgpack:"radius"`
 }
 
-func NewSphere(radius float32) Sphere {
-	return Sphere{
+func NewSphere(radius float32) *Sphere {
+	return &Sphere{
 		SceneElement: SceneElement{
 			Uuid: uuid.NewString(),
 			Type: "SphereGeometry",
@@ -143,7 +184,7 @@ func (s *Sphere) init_element() error {
 		Uuid: uuid.NewString(),
 		Type: "SphereGeometry",
 	}
-  return nil
+	return nil
 }
 
 type MeshGeometry struct {
@@ -163,7 +204,6 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 		log.Fatal(err)
 		return MeshGeometry{}, err
 	}
-	fmt.Println(data)
 	return MeshGeometry{
 		SceneElement: SceneElement{
 			Uuid: "cef79e52-526d-4263-b595-04fa2705974e",
@@ -172,11 +212,11 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 		Format: "stl",
 		Data:   data,
 	}, nil
-
 }
 
 func Objectify[T Geometry](g T) Scene {
 	scene_element := g.get_element()
+	fmt.Println(scene_element)
 	obj := NewScene()
 	obj.Object.GeometryUUID = scene_element.Uuid
 	obj.Object.MaterialUUID = DEFAULT_MATERIAL
