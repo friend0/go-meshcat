@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"reflect"
 
 	"github.com/google/uuid"
 )
@@ -43,6 +44,59 @@ func (g GenericGeom) get_element() SceneElement {
 		Uuid: g["uuid"].(string),
 		Type: g["type"].(string),
 	}
+}
+
+func (g GenericGeom) get_matrix() []float32 {
+	// assume position comes in as [x, y, z]
+	fmt.Printf("in matrix func %v\n", g)
+	fmt.Println(g["position"])
+	position, ok := g["position"]
+	if !ok {
+		fmt.Println("Position not found")
+		x, ok := g["x"].(float32)
+		if !ok {
+			x = 0
+		}
+		y, ok := g["y"].(float32)
+		if !ok {
+			y = 0
+		}
+		z, ok := g["z"].(float32)
+		if !ok {
+			z = 0
+		}
+		return []float32{1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1}
+	} else {
+		if position, err := interfaceToFloatSlice(position); err == nil {
+			// Assign the converted value back to the map
+			return []float32{1, 0, 0, float32(position[0]), 0, 1, 0, float32(position[1]), 0, 0, 1, float32(position[2]), 0, 0, 0, 1}
+		} else {
+			fmt.Println("Error converting:", err)
+			return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+		}
+	}
+}
+
+// interfaceToFloatSlice converts an interface to a slice of float64
+func interfaceToFloatSlice(val interface{}) ([]float64, error) {
+	// Use reflection to check if the value is a slice
+	v := reflect.ValueOf(val)
+	if v.Kind() != reflect.Slice {
+		return nil, fmt.Errorf("value is not a slice")
+	}
+
+	// Iterate through the slice and convert elements to float64
+	floatSlice := make([]float64, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		elem := v.Index(i).Interface()
+		floatVal, ok := elem.(float64)
+		if !ok {
+			return nil, fmt.Errorf("element %v is not a float32", elem)
+		}
+		floatSlice[i] = floatVal
+	}
+
+	return floatSlice, nil
 }
 
 func (geom GenericGeom) init_element() error {
@@ -96,6 +150,7 @@ func default_scene_metadata() SceneMetadata {
 
 type Geometry interface {
 	get_element() SceneElement
+	get_matrix() []float32
 	init_element() error
 }
 
@@ -118,8 +173,12 @@ func (b *Box) init_element() error {
 	return nil
 }
 
-func NewBox(width, height, depth float32) Box {
-	return Box{
+func (b *Box) get_matrix() []float32 {
+	return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+}
+
+func NewBox(width, height, depth float32) *Box {
+	return &Box{
 		SceneElement: SceneElement{
 			Uuid: uuid.NewString(),
 			Type: "BoxGeometry",
@@ -135,10 +194,13 @@ type Sphere struct {
 	Radius float32 `json:"radius" msgpack:"radius"`
 }
 
-func NewSphere(radius float32) Sphere {
+func NewSphere(radius float32, id string) Sphere {
+	if id == "" {
+		id = uuid.NewString()
+	}
 	return Sphere{
 		SceneElement: SceneElement{
-			Uuid: uuid.NewString(),
+			Uuid: id,
 			Type: "SphereGeometry",
 		},
 		Radius: radius,
@@ -155,6 +217,10 @@ func (s *Sphere) init_element() error {
 		Type: "SphereGeometry",
 	}
 	return nil
+}
+
+func (s *Sphere) get_matrix() []float32 {
+	return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 }
 
 type MeshGeometry struct {
