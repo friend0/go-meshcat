@@ -282,13 +282,14 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 
 func Objectify[T Geometry](g T) Scene {
 	scene_element := g.get_element()
-	fmt.Println(scene_element)
+	matrix := g.get_matrix()
+	fmt.Println("Matrix: ", matrix)
 	obj := NewScene()
 	obj.Object.GeometryUUID = scene_element.Uuid
 	obj.Object.MaterialUUID = DEFAULT_MATERIAL
 	obj.Object.Type = "Mesh"
 	obj.Object.Uuid = scene_element.Uuid
-	// obj.Object.Matrix = []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+	obj.Object.Matrix = matrix
 	obj.Geometries = []Geometry{g}
 	obj.Materials = []Material{NewLambertMaterial()}
 	return obj
