@@ -71,15 +71,15 @@ func (s *Server) urlSubscription() (*nats.Subscription, error) {
 	sub, err := s.NATS.QueueSubscribe("meshcat.url", "MESHCAT_URL_Q", func(msg *nats.Msg) {
 		b, err := msgpack.Marshal(&msg)
 		if err != nil {
-      s.Logger.Error(fmt.Sprintf("error encoding message: %v", err)) 
+			s.Logger.Error(fmt.Sprintf("error encoding message: %v", err))
 		}
 		err = s.Hub.Write(b)
-    if err != nil {
-      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
-    }
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err))
+		}
 	})
 	if err != nil {
-    s.Logger.Error(fmt.Sprintf("error creating NATS subscription: %v", err)) 
+		s.Logger.Error(fmt.Sprintf("error creating NATS subscription: %v", err))
 	}
 	return sub, err
 }
@@ -99,7 +99,6 @@ type SetFromServer struct {
 
 // SetObjectSubscription handler
 func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
-
 	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
 		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
@@ -136,9 +135,9 @@ func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
 
 		// Forward the message to the WebSocket server
 		err = s.Hub.Write(buf.Bytes())
-    if err != nil {
-      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
-    }
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err))
+		}
 		buf.Reset()
 	})
 	if err != nil {
@@ -155,14 +154,13 @@ type AddObject struct {
 
 // SetObject handler
 func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
-
 	sub, err := s.NATS.Subscribe("meshcat.geometries", func(msg *nats.Msg) {
 		// shape := strings.Split(string(msg.Subject), ".")[2]
-    shape := ""
+		shape := ""
 		// todo: check here to see if the shape is available
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
-    log.Printf("Received meshcat message from NATS: %s: shape %s", string(msg.Data), shape)
+		log.Printf("Received meshcat message from NATS: %s: shape %s", string(msg.Data), shape)
 
 		// let's say for now the message has the form "object_name.path.positionx.positiony.positionz"
 		// todo: command parsing for Geometry message data
@@ -176,14 +174,15 @@ func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
 				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
 				return
 			}
-      box.init_element()
+			box.init_element()
 			obj := Objectify(&box)
 			err = enc.Encode(SetObject{
 				Object: obj,
 				Command: Command{
 					Type: "set_object",
 					Path: "environment/box_geometries",
-				}})
+				},
+			})
 			if err != nil {
 				s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
 			}
@@ -223,10 +222,10 @@ func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
       }) 
     }
 		// Forward the message to the WebSocket server
-    err := s.Hub.Write(buf.Bytes())
-    if err != nil {
-      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
-    }
+		err := s.Hub.Write(buf.Bytes())
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err))
+		}
 		buf.Reset()
 	})
 	if err != nil {
@@ -318,7 +317,6 @@ func NewTransformation(data []byte) (transformation_matrix TransformationCommand
 
 // SetObject handler
 func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
-
 	sub, err := s.NATS.Subscribe("meshcat.transformations.>", func(msg *nats.Msg) {
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
 		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
@@ -338,16 +336,17 @@ func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 			Command: Command{
 				Type: "set_transform",
 				Path: path,
-			}})
+			},
+		})
 		if err != nil {
 			log.Printf("error sending msg: %v", err)
 		}
 
 		// Forward the message to the WebSocket server
-    err = s.Hub.Write(buf.Bytes())
-    if err != nil {
-      s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err)) 
-    }
+		err = s.Hub.Write(buf.Bytes())
+		if err != nil {
+			s.Logger.Error(fmt.Sprintf("error writing to web socket %v", err))
+		}
 		buf.Reset()
 	})
 	if err != nil {
