@@ -1,17 +1,11 @@
 package internal
 
 import (
-	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
-
-var writeWait = 10 * time.Second
-
-const pongWait = 60 * time.Second
 
 type Hub struct {
 	// Registered clients
@@ -28,14 +22,14 @@ type Hub struct {
 }
 
 func NewHub() *Hub {
-  hub := &Hub{
+	hub := &Hub{
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
 	}
-  go hub.run()
-  return hub
+	go hub.run()
+	return hub
 }
 
 func (h *Hub) run() {
@@ -49,7 +43,6 @@ func (h *Hub) run() {
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-      fmt.Println("got a message for broadcast")
 			for client := range h.clients {
 				select {
 				case client.send <- message:
@@ -63,16 +56,14 @@ func (h *Hub) run() {
 }
 
 func (h *Hub) Write(message []byte) error {
-  fmt.Println("Got here...")
-  h.broadcast <- message
-  fmt.Println("got here too")
-  return nil
+	h.broadcast <- message
+	return nil
 }
 
 // Define the WebSocket upgrader
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
-	WriteBufferSize: 8192,
+	WriteBufferSize: 1024,
 	WriteBufferPool: &sync.Pool{},
 	CheckOrigin: func(r *http.Request) bool {
 		return true

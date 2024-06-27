@@ -183,7 +183,7 @@ func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
 			s.Logger.Info(fmt.Sprintf("error processing add object request %v", err))
 			return
 		}
-		fmt.Println("Parsed buffer geometry", geom)
+		fmt.Printf("Parsed buffer geometry %#+v\n", geom)
 		geom.init_element()
 		obj := Objectify(geom)
 		err = enc.Encode(SetObject{

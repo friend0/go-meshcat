@@ -10,6 +10,8 @@ import (
 )
 
 const (
+  var writeWait = 10 * time.Second
+  const pongWait = 60 * time.Second
   pingPeriod  = (pongWait * 9) / 10
 	maxMessageSize = 8192
 )
