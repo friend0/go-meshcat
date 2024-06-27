@@ -218,7 +218,10 @@ type TransformationCommand struct {
 
 type SetTransformationCommand struct {
 	Command
-	Object TransformationCommand `msgpack:"object"`
+	Matrix4     []float64 `msgpack:"matrix,omitempty"`
+	Translation []float64 `msgpack:"translation,omitempty"`
+	Rotation    []float64 `msgpack:"rotation,omitempty"`
+	Scale       []float64 `msgpack:"scale,omitempty"`
 }
 
 // eulerToRotationMatrix converts Euler angles to a rotation matrix.

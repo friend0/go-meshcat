@@ -117,8 +117,16 @@ func (nmw NatsMissionWriter) Write(p []byte) (n int, err error) {
 }
 
 func transform_publisher(wp []float64, w io.Writer) error {
-	tc := TransformationCommand{
+	transformation := TransformationCommand{
 		Translation: wp,
+	}
+
+	matrix4, error := NewTransformation(transformation)
+	if error != nil {
+		return error
+	}
+	tc := SetTransformationCommand{
+		Matrix4: matrix4,
 	}
 	tranformation_json, err := json.Marshal(tc)
 	if err != nil {
