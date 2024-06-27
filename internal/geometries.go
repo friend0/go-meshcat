@@ -68,7 +68,7 @@ func (g BufferGeom) get_matrix() []float32 {
 	// fmt.Printf("%#+v\n", g)
 	position := g.Position
 	if len(position) >= 3 {
-		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, position[0], position[1], position[2]}
+		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, position[0], position[1], position[2], 1}
 	} else {
 		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 	}
