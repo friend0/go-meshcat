@@ -50,7 +50,7 @@ func (b *BufferGeom) init_element() error {
 	if b.Type == "" {
 		b.Type = "BufferGeometry"
 	}
-	b.Position = []float32{0, 0, 0}
+	// b.Position = []float32{0, 0, 0}
 
 	return nil
 }
@@ -59,6 +59,18 @@ func (b BufferGeom) get_element() SceneElement {
 	return SceneElement{
 		Uuid: b.Uuid,
 		Type: b.Type,
+	}
+}
+
+func (g BufferGeom) get_matrix() []float32 {
+	// assume position comes in as [x, y, z]
+	// fmt.Printf("in matrix func %#+v\n", g)
+	// fmt.Printf("%#+v\n", g)
+	position := g.Position
+	if len(position) >= 3 {
+		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, position[0], position[1], position[2]}
+	} else {
+		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
 	}
 }
 
@@ -283,7 +295,7 @@ func NewStarling(x, y, z float64) (MeshGeometry, error) {
 func Objectify[T Geometry](g T) Scene {
 	scene_element := g.get_element()
 	matrix := g.get_matrix()
-	fmt.Println("Matrix: ", matrix)
+	// fmt.Println("Matrix: ", matrix)
 	obj := NewScene()
 	obj.Object.GeometryUUID = scene_element.Uuid
 	obj.Object.MaterialUUID = DEFAULT_MATERIAL
