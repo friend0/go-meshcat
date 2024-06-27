@@ -10,9 +10,9 @@ import (
 )
 
 const (
-  var writeWait = 10 * time.Second
-  const pongWait = 60 * time.Second
-  pingPeriod  = (pongWait * 9) / 10
+	writeWait      = 10 * time.Second
+	pongWait       = 10 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
 	maxMessageSize = 8192
 )
 
@@ -103,19 +103,19 @@ func (c *Client) writePump() {
 
 // serveWs handles websocket requests from the peer.
 func (s *Server) serveWs() echo.HandlerFunc {
-  return func(c echo.Context) error {
-    conn, err := upgrader.Upgrade(c.Response().Writer, c.Request(), nil)
-    if err != nil {
-      log.Println(err)
-      return err
-    }
-    client := &Client{hub: s.Hub, conn: conn, send: make(chan []byte, 256)}
-    client.hub.register <- client
+	return func(c echo.Context) error {
+		conn, err := upgrader.Upgrade(c.Response().Writer, c.Request(), nil)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		client := &Client{hub: s.Hub, conn: conn, send: make(chan []byte, 256)}
+		client.hub.register <- client
 
-    // Allow collection of memory referenced by the caller by doing all work in
-    // new goroutines.
-    go client.writePump()
-    go client.readPump()
-    return nil
-  }
+		// Allow collection of memory referenced by the caller by doing all work in
+		// new goroutines.
+		go client.writePump()
+		go client.readPump()
+		return nil
+	}
 }
