@@ -4,21 +4,21 @@ type Material interface {
 	NewObject(o *Scene)
 }
 
+const DEFAULT_MATERIAL = "396744fe-087d-11ec-9957-7fbbaaa96777"
+
 type LambertMaterial struct {
 	Uuid               string  `json:"uuid" msgpack:"uuid"`
 	Type               string  `json:"type" msgpack:"type"`
 	Color              int     `json:"color" msgpack:"color"`
-	Reflectivity       float32 `json:"reflectivity" msgpack:"reflectivity"`
 	Side               int     `json:"side" msgpack:"side"`
-	Transparent        bool    `json:"transparent" msgpack:"transparent"`
+	VertexColors       int     `json:"vertex_colors" msgpack:"vertex_colors"`
+	Reflectivity       float32 `json:"reflectivity" msgpack:"reflectivity"`
 	Opacity            float32 `json:"opacity" msgpack:"opacity"`
 	Linewidth          float32 `json:"linewidth" msgpack:"linewidth"`
-	Wireframe          bool    `json:"wireframe" msgpack:"wireframe"`
 	WireframeLinewidth float32 `json:"wireframe_linewidth" msgpack:"wireframe_linewidth"`
-	VertexColors       int     `json:"vertex_colors" msgpack:"vertex_colors"`
+	Transparent        bool    `json:"transparent" msgpack:"transparent"`
+	Wireframe          bool    `json:"wireframe" msgpack:"wireframe"`
 }
-
-const DEFAULT_MATERIAL = "396744fe-087d-11ec-9957-7fbbaaa96777"
 
 func NewLambertMaterial() LambertMaterial {
 	return LambertMaterial{
@@ -35,6 +35,7 @@ func NewLambertMaterial() LambertMaterial {
 		VertexColors:       0,
 	}
 }
+
 func (l LambertMaterial) NewObject(o *Scene) {
 	o.Materials = append(o.Materials, l)
 }
