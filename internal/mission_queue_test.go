@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/friend0/go-meshcat/pkg/numgo"
 )
 
 func TestLinspace(t *testing.T) {
@@ -26,7 +28,7 @@ func TestLinspace(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := Linspace(test.start, test.end, test.num, true)
+		got := numgo.Linspace(test.start, test.end, test.num, true)
 		if !reflect.DeepEqual(got, test.expected) {
 			t.Errorf("Linspace(%v, %v, %v) = %v; want %v", test.start, test.end, test.num, got, test.expected)
 		}
@@ -57,6 +59,6 @@ func mock_publisher(wp []float64, w io.Writer) error {
 }
 
 func TestWaypointIterator(t *testing.T) {
-	wp := Circspace(0, 2*math.Pi, 1, 10, true)
+	wp := numgo.Circspace(0, 2*math.Pi, 1, 10, true)
 	WaypointIterator(os.Stderr, wp, mock_publisher, 1*time.Millisecond)
 }

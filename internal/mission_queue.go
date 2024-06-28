@@ -9,50 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/friend0/go-meshcat/pkg/numgo"
 	"github.com/nats-io/nats.go"
 )
 
 type Waypoint [][]float64
-
-func Linspace(start, stop float64, num int, endpoint bool) []float64 {
-	res := make([]float64, num)
-	if num == 0 {
-		return res
-	}
-	var den float64
-	if endpoint {
-		den = float64(num - 1)
-	} else {
-		den = float64(num)
-	}
-	for i := 0; i < num; i++ {
-		if i == 0 {
-			res[i] = start
-		} else {
-			res[i] = start + float64(i)*(stop-start)/den
-		}
-	}
-	return res
-}
-
-func Circspace(start, stop, radius float64, num int, endpoint bool) [][]float64 {
-	res := make([][]float64, num)
-	if num == 0 {
-		return res
-	}
-	var den float64
-	if endpoint {
-		den = float64(num - 1)
-	} else {
-		den = float64(num)
-	}
-	for i := 0; i < num; i++ {
-		t := start + float64(i)*(stop-start)/den
-		res[i] = []float64{radius * math.Cos(t), radius * math.Sin(t), 1}
-
-	}
-	return res
-}
 
 type Work interface {
 	Do(results chan string)
@@ -188,7 +149,7 @@ func (mw MissionWork) Do(results chan string) {
 		duration := 10
 		fps := 60
 		for {
-			waypoints := Circspace(0, 2*math.Pi, mw.Radius, duration*fps*int(mw.Omega), true)
+			waypoints := numgo.Circspace(0, 2*math.Pi, mw.Radius, duration*fps*int(mw.Omega), true)
 			WaypointIterator(nmw, waypoints, transform_publisher, 8*time.Millisecond)
 		}
 	}
