@@ -19,29 +19,35 @@ func Linspace(start, stop float64, num int, endpoint bool) []float64 {
 	if num == 0 {
 		return res
 	}
+	var den float64
+	if endpoint {
+		den = float64(num - 1)
+	} else {
+		den = float64(num)
+	}
 	for i := 0; i < num; i++ {
 		if i == 0 {
 			res[i] = start
 		} else {
-			var den float64
-			if endpoint {
-				den = float64(num - 1)
-			} else {
-				den = float64(num)
-			}
-			res[i] = start + float64(i)*(stop-start)/float64(den)
+			res[i] = start + float64(i)*(stop-start)/den
 		}
 	}
 	return res
 }
 
-func Circspace(low, high, radius float64, n int) [][]float64 {
-	res := make([][]float64, n)
-	if n == 0 {
+func Circspace(start, stop, radius float64, num int, endpoint bool) [][]float64 {
+	res := make([][]float64, num)
+	if num == 0 {
 		return res
 	}
-	for i := 0; i < n; i++ {
-		t := low + float64(i)*(high-low)/float64(n)
+	var den float64
+	if endpoint {
+		den = float64(num - 1)
+	} else {
+		den = float64(num)
+	}
+	for i := 0; i < num; i++ {
+		t := start + float64(i)*(stop-start)/den
 		res[i] = []float64{radius * math.Cos(t), radius * math.Sin(t), 1}
 
 	}
@@ -67,7 +73,7 @@ func (s *Server) InitializeWorkQueue(workers int, queue_size int, conn *nats.Con
 	for i := range workers {
 		go MissionWorker(i, wq)
 	}
-	// go wq.Gather()
+	go wq.Gather()
 	s.Q = wq
 }
 
@@ -82,6 +88,13 @@ func (wq *WorkQueue) Add(work Work) error {
 
 func (wq *WorkQueue) Get() Work {
 	return <-wq.Q
+}
+
+// todo: just clearing out results as we get missions completed
+// Gather clears out the results queue.
+// In the future, elements gathered on the results channel can be published to nats or logged
+func (wq *WorkQueue) Gather() {
+	<-wq.Results
 }
 
 func (wq *WorkQueue) Close() {
@@ -146,7 +159,10 @@ func transform_publisher(wp []float64, w io.Writer) error {
 func WaypointIterator(sink io.Writer, waypoints [][]float64, transform_publisher func([]float64, io.Writer) error, ts time.Duration) {
 	var wg sync.WaitGroup
 
-	// todo: setup a minimum ticker value
+	// todo: configurable minimum time step
+	if ts < 8*time.Millisecond {
+		ts = 8 * time.Millisecond
+	}
 	ticker := time.NewTicker(ts)
 	wg.Add(1)
 	go func(waypoints [][]float64) {
@@ -164,7 +180,6 @@ func WaypointIterator(sink io.Writer, waypoints [][]float64, transform_publisher
 }
 
 func (mw MissionWork) Do(results chan string) {
-	// full_path := strings.Join([]string{"meshcat.transform"}, ".")
 	nmw := NatsMissionWriter{
 		Path: mw.Path,
 		Conn: mw.Conn,
@@ -173,7 +188,7 @@ func (mw MissionWork) Do(results chan string) {
 		duration := 10
 		fps := 60
 		for {
-			waypoints := Circspace(0, 2*math.Pi, mw.Radius, duration*fps*int(mw.Omega))
+			waypoints := Circspace(0, 2*math.Pi, mw.Radius, duration*fps*int(mw.Omega), true)
 			WaypointIterator(nmw, waypoints, transform_publisher, 8*time.Millisecond)
 		}
 	}

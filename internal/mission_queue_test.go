@@ -48,7 +48,6 @@ func TestWorkQueue(t *testing.T) {
 			break
 		}
 	}
-	fmt.Printf("Results: %v\n", results)
 	defer s.Q.Close()
 }
 
@@ -58,6 +57,6 @@ func mock_publisher(wp []float64, w io.Writer) error {
 }
 
 func TestWaypointIterator(t *testing.T) {
-	wp := Circspace(0, 2*math.Pi, 1, 10)
+	wp := Circspace(0, 2*math.Pi, 1, 10, true)
 	WaypointIterator(os.Stderr, wp, mock_publisher, 1*time.Millisecond)
 }
