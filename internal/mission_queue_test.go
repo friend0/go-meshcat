@@ -26,7 +26,7 @@ func TestLinspace(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := Linspace(test.start, test.end, test.num)
+		got := Linspace(test.start, test.end, test.num, true)
 		if !reflect.DeepEqual(got, test.expected) {
 			t.Errorf("Linspace(%v, %v, %v) = %v; want %v", test.start, test.end, test.num, got, test.expected)
 		}
