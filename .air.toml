@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
 pre_cmd = []
 cmd = "go build -o ./build/app.bin ./cmd/go_meshcat.go"
-post_cmd = ["nats-server --signal quit"]
+post_cmd = []
 args_bin = []
 bin = "./build/app.bin"
 delay = 1000
