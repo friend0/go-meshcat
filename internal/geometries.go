@@ -2,11 +2,9 @@ package internal
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"path"
 	"reflect"
 
+	"github.com/friend0/transformations"
 	"github.com/google/uuid"
 )
 
@@ -32,6 +30,8 @@ type BufferGeometryData struct {
 	BoundingSphere               Sphere `json:"boundingSphere,omitempty" msgpack:"boundingSphere,omitempty"`
 }
 
+// BufferGeom is the base class for all higher order geometries in three.js
+// It must reference the type of geometry, and attribtes specifig to that geometry.
 type BufferGeom struct {
 	Uuid               string    `json:"uuid" msgpack:"uuid"`
 	Type               string    `json:"type" msgpack:"type"`
@@ -39,8 +39,17 @@ type BufferGeom struct {
 	Width              float32   `json:"width" msgpack:"width,omitempty"`
 	Depth              float32   `json:"depth" msgpack:"depth,omitempty"`
 	Radius             float32   `json:"radius" msgpack:"radius,omitempty"`
-	Position           []float32 `json:"position" msgpack:"position,omitempty"`
+	Rotation           []float64 `json:"rotation" msgpack:"rotation,omitempty"`
+	Translation        []float64 `json:"translation" msgpack:"translation,omitempty"`
 	BufferGeometryData `json:"data" msgpack:"data"`
+}
+
+func toFloat32(in []float64) []float32 {
+	out := make([]float32, len(in))
+	for i, v := range in {
+		out[i] = float32(v)
+	}
+	return out
 }
 
 func (b *BufferGeom) init_element() error {
@@ -50,8 +59,6 @@ func (b *BufferGeom) init_element() error {
 	if b.Type == "" {
 		b.Type = "BufferGeometry"
 	}
-	// b.Position = []float32{0, 0, 0}
-
 	return nil
 }
 
@@ -62,61 +69,14 @@ func (b BufferGeom) get_element() SceneElement {
 	}
 }
 
-func (g BufferGeom) get_matrix() []float32 {
-	// assume position comes in as [x, y, z]
-	// fmt.Printf("in matrix func %#+v\n", g)
-	// fmt.Printf("%#+v\n", g)
-	position := g.Position
-	if len(position) >= 3 {
-		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, position[0], position[1], position[2], 1}
-	} else {
+func (g *BufferGeom) get_matrix() []float32 {
+	translation := g.Translation
+	rotation := g.Rotation
+	matrix4, err := transformations.NewTransformation(translation, rotation, nil)
+	if err != nil {
 		return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
-	}
-}
-
-type GenericGeom map[string]interface{}
-
-func (g GenericGeom) get_element() SceneElement {
-	if g["uuid"] == nil {
-		g["uuid"] = uuid.NewString()
-	}
-	if g["type"] == nil {
-		g["type"] = "BoxGeometry"
-	}
-	return SceneElement{
-		Uuid: g["uuid"].(string),
-		Type: g["type"].(string),
-	}
-}
-
-func (g GenericGeom) get_matrix() []float32 {
-	// assume position comes in as [x, y, z]
-	fmt.Printf("in matrix func %v\n", g)
-	fmt.Println(g["position"])
-	position, ok := g["position"]
-	if !ok {
-		fmt.Println("Position not found")
-		x, ok := g["x"].(float32)
-		if !ok {
-			x = 0
-		}
-		y, ok := g["y"].(float32)
-		if !ok {
-			y = 0
-		}
-		z, ok := g["z"].(float32)
-		if !ok {
-			z = 0
-		}
-		return []float32{1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1}
 	} else {
-		if position, err := interfaceToFloatSlice(position); err == nil {
-			// Assign the converted value back to the map
-			return []float32{1, 0, 0, float32(position[0]), 0, 1, 0, float32(position[1]), 0, 0, 1, float32(position[2]), 0, 0, 0, 1}
-		} else {
-			fmt.Println("Error converting:", err)
-			return []float32{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
-		}
+		return toFloat32(matrix4)
 	}
 }
 
@@ -140,20 +100,6 @@ func interfaceToFloatSlice(val interface{}) ([]float64, error) {
 	}
 
 	return floatSlice, nil
-}
-
-func (geom GenericGeom) init_element() error {
-	_type, ok := geom["type"].(string)
-	if !ok {
-		return fmt.Errorf("Geometry type not found")
-	}
-	scene_element := SceneElement{
-		Uuid: uuid.NewString(),
-		Type: _type,
-	}
-	geom["uuid"] = scene_element.Uuid
-	geom["type"] = scene_element.Type
-	return nil
 }
 
 // SceneObject is a like join, where the tables being joined are the elements
@@ -273,23 +219,6 @@ type MeshGeometry struct {
 
 func (m MeshGeometry) get_element() SceneElement {
 	return m.SceneElement
-}
-
-func NewStarling(x, y, z float64) (MeshGeometry, error) {
-	wd, _ := os.Getwd()
-	data, err := os.ReadFile(path.Join(wd, "/web/meshcat/data/starling1.stl"))
-	if err != nil {
-		log.Fatal(err)
-		return MeshGeometry{}, err
-	}
-	return MeshGeometry{
-		SceneElement: SceneElement{
-			Uuid: "cef79e52-526d-4263-b595-04fa2705974e",
-			Type: "_meshfile_geometry",
-		},
-		Format: "stl",
-		Data:   data,
-	}, nil
 }
 
 func Objectify[T Geometry](g T) Scene {
