@@ -82,7 +82,7 @@ func (s *Server) urlSubscription() (*nats.Subscription, error) {
 	return sub, err
 }
 
-type SetFromServerMetadata struct {
+type FileLoader struct {
 	ResourceName string  `msgpack:"resource_name"`
 	Path         string  `msgpack:"path"`
 	PositionX    float64 `msgpack:"x"`
@@ -90,37 +90,28 @@ type SetFromServerMetadata struct {
 	PositionZ    float64 `msgpack:"z"`
 }
 
-type SetFromServer struct {
+type FileLoaderCommand struct {
 	Command `msgpack:"command"`
-	Object  SetFromServerMetadata `msgpack:"object"`
+	Object  FileLoader `msgpack:"object"`
 }
 
 // SetObjectSubscription handler
 func (s *Server) setObjectSubscription() (*nats.Subscription, error) {
-	sub, err := s.NATS.Subscribe("meshcat.objects", func(msg *nats.Msg) {
+	sub, err := s.NATS.Subscribe("meshcat.objects.>", func(msg *nats.Msg) {
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
 		path := strings.Join(strings.Split(string(msg.Subject), ".")[2:], "/")
-		log.Printf("Received meshcat message from NATS: %s", string(msg.Data))
 
-		// let's say for now the message has the form "object_name path positionx positiony positionz"
-		cmd := strings.Split(string(msg.Data), " ")
-		object_name, path, x, y, z := cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]
-		fx, fy, fz, err := ParseFloats(x, y, z)
+		file_loader := FileLoader{}
+		err := json.Unmarshal(msg.Data, &file_loader)
 		if err != nil {
-			s.Logger.Info(fmt.Sprintf("error processing position input in the command message %s", msg.Data))
+			s.Logger.Error(fmt.Sprintf("unable to marshal `` object: %v", err))
 			return
 		}
 
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
-		err = enc.Encode(SetFromServer{
-			Object: SetFromServerMetadata{
-				ResourceName: object_name,
-				Path:         path,
-				PositionX:    fx,
-				PositionY:    fy,
-				PositionZ:    fz,
-			},
+		err = enc.Encode(FileLoaderCommand{
+			Object: file_loader,
 			Command: Command{
 				Type: "set_object_from_server",
 				Path: path,
