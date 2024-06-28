@@ -14,16 +14,22 @@ import (
 
 type Waypoint [][]float64
 
-func Linspace(low, high float64, n int) []float64 {
-	res := make([]float64, n)
-	if n == 0 {
+func Linspace(start, stop float64, num int, endpoint bool) []float64 {
+	res := make([]float64, num)
+	if num == 0 {
 		return res
 	}
-	for i := 0; i < n; i++ {
+	for i := 0; i < num; i++ {
 		if i == 0 {
-			res[i] = low
+			res[i] = start
 		} else {
-			res[i] = low + float64(i)*(high-low)/float64(n-1)
+			var den float64
+			if endpoint {
+				den = float64(num - 1)
+			} else {
+				den = float64(num)
+			}
+			res[i] = start + float64(i)*(stop-start)/float64(den)
 		}
 	}
 	return res
@@ -84,7 +90,6 @@ func (wq *WorkQueue) Close() {
 }
 
 func MissionWorker(id int, wq WorkQueue) {
-	fmt.Println(wq.Results)
 	for work := range wq.Q {
 		fmt.Println("Worker", id, "started job")
 		work.Do(wq.Results)
@@ -117,16 +122,18 @@ func (nmw NatsMissionWriter) Write(p []byte) (n int, err error) {
 }
 
 func transform_publisher(wp []float64, w io.Writer) error {
-	transformation := TransformationCommand{
-		Translation: wp,
-	}
+	// calculate the heading from the current waypoint
+	heading := math.Atan2(-wp[1], wp[0])
 
-	matrix4, error := NewTransformation(transformation)
-	if error != nil {
-		return error
-	}
 	tc := SetTransformationCommand{
-		Matrix4: matrix4,
+		Command: Command{
+			Type: "set_transform",
+			Path: "starling",
+		},
+		TransformationCommand: TransformationCommand{
+			Translation: wp,
+			Rotation:    []float64{0, 0, heading - 90},
+		},
 	}
 	tranformation_json, err := json.Marshal(tc)
 	if err != nil {
@@ -138,9 +145,8 @@ func transform_publisher(wp []float64, w io.Writer) error {
 
 func WaypointIterator(sink io.Writer, waypoints [][]float64, transform_publisher func([]float64, io.Writer) error, ts time.Duration) {
 	var wg sync.WaitGroup
-	if ts == 0 {
-		ts = 1
-	}
+
+	// todo: setup a minimum ticker value
 	ticker := time.NewTicker(ts)
 	wg.Add(1)
 	go func(waypoints [][]float64) {
@@ -164,8 +170,12 @@ func (mw MissionWork) Do(results chan string) {
 		Conn: mw.Conn,
 	}
 	if mw.Type == "orbit" {
-		waypoints := Circspace(0, 2*math.Pi, mw.Radius, 100)
-		WaypointIterator(nmw, waypoints, transform_publisher, time.Duration(mw.Omega/100*1e9))
+		duration := 10
+		fps := 60
+		for {
+			waypoints := Circspace(0, 2*math.Pi, mw.Radius, duration*fps*int(mw.Omega))
+			WaypointIterator(nmw, waypoints, transform_publisher, 8*time.Millisecond)
+		}
 	}
 	results <- "Complete"
 }
