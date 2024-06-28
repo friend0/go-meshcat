@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"strconv"
 	"strings"
 
 	"github.com/friend0/transformations"
 	"github.com/nats-io/nats.go"
 	"github.com/vmihailenco/msgpack/v5"
-	"gonum.org/v1/gonum/mat"
 )
 
 func (s *Server) NATSSubscriptions() error {
@@ -210,90 +208,18 @@ func (s *Server) setGeometrySubscription() (*nats.Subscription, error) {
 }
 
 type TransformationCommand struct {
-	Matrix4     []float64 `msgpack:"matrix"`
-	Translation []float64 `msgpack:"translation"`
-	Rotation    []float64 `msgpack:"rotation"`
-	Scale       []float64 `msgpack:"scale"`
+	Matrix4     []float64 `json:"matrix" msgpack:"matrix,omitempty"`
+	Translation []float64 `json:"translation" msgpack:"translation,omitempty"`
+	Rotation    []float64 `json:"rotation" msgpack:"rotation,omitempty"`
+	Scale       []float64 `json:"scale" msgpack:"scale,omitempty"`
 }
 
 type SetTransformationCommand struct {
 	Command
-	Matrix4     []float64 `msgpack:"matrix,omitempty"`
-	Translation []float64 `msgpack:"translation,omitempty"`
-	Rotation    []float64 `msgpack:"rotation,omitempty"`
-	Scale       []float64 `msgpack:"scale,omitempty"`
+	TransformationCommand
 }
 
-// eulerToRotationMatrix converts Euler angles to a rotation matrix.
-// The Euler angles are represented as an array of 3 float64 values: [roll, pitch, yaw].
-// Converts to the aerospace sequence of rotations: ZYX, applied in order from right to left.
-func eulerToRotationMatrix(e [3]float64) *mat.Dense {
-	c1, s1 := math.Cos(e[0]), math.Sin(e[0])
-	c2, s2 := math.Cos(e[1]), math.Sin(e[1])
-	c3, s3 := math.Cos(e[2]), math.Sin(e[2])
-
-	return mat.NewDense(3, 3, []float64{
-		c2 * c3, c2 * s3, -s2,
-		c3*s1*s2 - c1*s3, c1*c3 + s1*s2*s3, c2 * s1,
-		c3*c1*s2 + s1*s3, c1*s2*s3 - c3*s1, c2 * c1,
-	})
-}
-
-func scalingMatrix(s [3]float64) *mat.Dense {
-	return mat.NewDense(4, 4, []float64{
-		s[0], 0, 0, 0,
-		0, s[1], 0, 0,
-		0, 0, s[2], 0,
-		0, 0, 0, 1,
-	})
-}
-
-func translationMatrix(t [3]float64) *mat.Dense {
-	return mat.NewDense(4, 4, []float64{
-		1, 0, 0, t[0],
-		0, 1, 0, t[1],
-		0, 0, 1, t[2],
-		0, 0, 0, 1,
-	})
-}
-
-func NewTransformation(data []byte) (transformation_matrix TransformationCommand, err error) {
-	err = json.Unmarshal(data, &transformation_matrix)
-	if err != nil {
-		return transformation_matrix, fmt.Errorf("unable to unmarshal transformation matrix: %v", err)
-	}
-
-	// check if Matrix4 is already specified, in which case, just return the result
-	if transformation_matrix.Matrix4 != nil && len(transformation_matrix.Matrix4) == 16 {
-		for _, v := range transformation_matrix.Matrix4 {
-			if v != 0.0 {
-				break
-			}
-		}
-		return transformation_matrix, nil
-	}
-
-	// determine rotation type, normalize to quaternion
-	rotation := transformation_matrix.Rotation
-	if rotation == nil {
-		rotation = []float64{0, 0, 0, 1}
-	} else if len(rotation) == 3 {
-		// euler to quaternion
-		rotation, err = transformations.EulerToQuaternion(([3]float64)(rotation))
-		if err != nil {
-			return transformation_matrix, fmt.Errorf("unable to convert euler angles to quaternion: %v", err)
-		}
-	} else if len(rotation) == 4 {
-		// determine if the quaternion is valid, and normalized
-		rotation = transformations.NewQuaternionFromSlice(rotation)
-	}
-	transformation_matrix.Rotation = rotation
-
-	// todo: handle scaling matrix. Not a high priority for now
-	return transformation_matrix, nil
-}
-
-// SetObject handler
+// setTransformationSubscription accepts a request to perform an affine transformation on an object in the scene tree
 func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 	sub, err := s.NATS.Subscribe("meshcat.transformations.>", func(msg *nats.Msg) {
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS `%s` on subject `%s`", string(msg.Data), strings.Split(msg.Subject, ".")[2:]))
@@ -302,15 +228,22 @@ func (s *Server) setTransformationSubscription() (*nats.Subscription, error) {
 		var buf bytes.Buffer
 		enc := msgpack.NewEncoder(&buf)
 
-		transformation_matrix, err := NewTransformation(msg.Data)
+		transformation_matrix := TransformationCommand{}
+		err := json.Unmarshal(msg.Data, &transformation_matrix)
+		if err != nil {
+			s.Logger.Info(fmt.Sprintf("error processing transformation input in the command message %s", msg.Data))
+			return
+		}
+
+		matrix4, err := transformations.NewTransformation(transformation_matrix.Translation, transformation_matrix.Rotation, &transformation_matrix.Matrix4)
 		if err != nil {
 			s.Logger.Error(fmt.Sprintf("unable to build `TransformationCommand` object: %v", err))
 			return
 		}
-
-		s.Logger.Info(fmt.Sprintf("transformation matrix: %v", transformation_matrix))
 		err = enc.Encode(SetTransformationCommand{
-			Object: transformation_matrix,
+			TransformationCommand: TransformationCommand{
+				Matrix4: matrix4,
+			},
 			Command: Command{
 				Type: "set_transform",
 				Path: path,
@@ -340,7 +273,7 @@ func (s *Server) missionSubscription() (*nats.Subscription, error) {
 		full_path := strings.Join(path, ".")
 
 		s.Logger.Info(fmt.Sprintf("Received meshcat message from NATS: %s on path %s", string(msg.Data), path))
-		s.Q.Add(MissionWork{Conn: s.NATS, Path: full_path, Type: "orbit", Radius: 1, Omega: 1})
+		s.Q.Add(MissionWork{Conn: s.NATS, Path: full_path, Type: "orbit", Radius: 1, Omega: 10})
 	})
 	if err != nil {
 		log.Fatalf("Error subscribing to NATS subject: %v", err)
